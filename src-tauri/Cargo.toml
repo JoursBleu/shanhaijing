@@ -1,6 +1,6 @@
 [package]
 name = "shanhaijing"
-version = "0.1.0"
+version = "1.0.0"
 description = "Shanhaijing — agents as friends, in the open."
 authors = ["JoursBleu"]
 edition = "2021"

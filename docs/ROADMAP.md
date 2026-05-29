@@ -55,9 +55,10 @@
 
 ## v1.0 — First public release
 
-- [ ] Windows / macOS / Linux installers
+- [x] Bug bash (typecheck + vite build clean across all features)
+- [x] Release notes ([v1.0-release-notes.md](v1.0-release-notes.md))
+- [ ] Windows / macOS / Linux installers (run `pnpm tauri build` per host)
 - [ ] Landing page (web download, no app stores)
-- [ ] Bug bash
 
 ## v2+ (later)
 
