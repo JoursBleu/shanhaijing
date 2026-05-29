@@ -5,6 +5,11 @@ import { sendMessage } from "@/features/send";
 import { regenerateAssistantMessage } from "@/features/chat";
 import { summarizeConversation } from "@/features/summarize";
 import {
+  exportConversationAsMarkdown,
+  exportConversationAsJson,
+} from "@/features/exportConversation";
+import { buildPromptDebug } from "@/features/promptDebug";
+import {
   deleteMessage,
   insertMessage,
   updateMessageContent,
@@ -19,6 +24,7 @@ import { SkillsPanel } from "@/components/settings/SkillsPanel";
 import { MemoriesPanel } from "@/components/settings/MemoriesPanel";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 
 function Welcome() {
   return (
@@ -61,6 +67,7 @@ function ConversationView({ id }: { id: string }) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
+  const [promptDebug, setPromptDebug] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const greetingFiredRef = useRef<Set<string>>(new Set());
 
@@ -193,6 +200,34 @@ function ConversationView({ id }: { id: string }) {
         >
           {summarizing ? "总结中…" : "💾 沉淀为记忆"}
         </button>
+        <button
+          className="text-xs text-[var(--color-text-3)] hover:text-[var(--color-text-1)]"
+          title="导出为 Markdown"
+          onClick={() => exportConversationAsMarkdown(id, { activeVariants: activeVariant })}
+        >
+          ⇩MD
+        </button>
+        <button
+          className="text-xs text-[var(--color-text-3)] hover:text-[var(--color-text-1)]"
+          title="导出为 JSON"
+          onClick={() => exportConversationAsJson(id)}
+        >
+          ⇩JSON
+        </button>
+        <button
+          className="text-xs text-[var(--color-text-3)] hover:text-[var(--color-text-1)]"
+          title="查看本次会话下一个回合将注入的 system prompt"
+          onClick={async () => {
+            try {
+              const debug = await buildPromptDebug(id);
+              setPromptDebug(debug);
+            } catch (e: any) {
+              alert("调试失败：" + (e?.message ?? e));
+            }
+          }}
+        >
+          🔍prompt
+        </button>
       </header>
 
       <div className="flex-1 overflow-y-auto p-3">
@@ -273,6 +308,30 @@ function ConversationView({ id }: { id: string }) {
           </Button>
         </div>
       </footer>
+      {promptDebug !== null && (
+        <Modal open={true} onClose={() => setPromptDebug(null)} title="System Prompt (下一回合)">
+          <div className="space-y-2">
+            <div className="text-xs text-[var(--color-text-3)]">
+              这是下一次发消息时模型会看到的 system 段。Markdown 渲染前的原文。
+            </div>
+            <pre className="text-xs bg-[var(--color-bg-0)] text-[var(--color-text-1)] p-3 rounded overflow-auto max-h-[60vh] whitespace-pre-wrap">
+              {promptDebug}
+            </pre>
+            <div className="flex justify-end gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => navigator.clipboard.writeText(promptDebug)}
+              >
+                复制
+              </Button>
+              <Button size="sm" onClick={() => setPromptDebug(null)}>
+                关闭
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }

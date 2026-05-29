@@ -47,10 +47,11 @@
 
 ## v0.7 — Polish
 
-- [ ] Bilingual i18n (zh + en)
-- [ ] Themes (Discord dark default, plus a light theme + 1 alt)
-- [ ] Export Markdown / JSON
-- [ ] Auto-update channel
+- [x] Bilingual i18n (zh + en)
+- [x] Themes (dark default + light)
+- [x] Export Markdown / JSON
+- [x] Prompt debug panel
+- [ ] Auto-update channel (deferred to post-1.0)
 
 ## v1.0 — First public release
 
