@@ -5,6 +5,7 @@ import { sendMessage } from "@/features/send";
 import {
   deleteMessage,
   insertMessage,
+  updateMessageContent,
 } from "@/repos/messages";
 import { MessageBubble } from "@/components/MessageBubble";
 import { ProvidersPanel } from "@/components/settings/ProvidersPanel";
@@ -181,6 +182,10 @@ function ConversationView({ id }: { id: string }) {
                 m.role === "assistant" &&
                 m.id === messages[messages.length - 1]?.id
               }
+              onSaveEdit={async (newContent) => {
+                await updateMessageContent(m.id, newContent);
+                await reloadMessages(id);
+              }}
               onRegenerate={
                 m.role === "assistant" ? () => regenerate(m.id) : undefined
               }
