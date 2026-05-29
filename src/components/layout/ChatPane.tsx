@@ -10,6 +10,8 @@ import { MessageBubble } from "@/components/MessageBubble";
 import { ProvidersPanel } from "@/components/settings/ProvidersPanel";
 import { PersonasPanel } from "@/components/settings/PersonasPanel";
 import { AgentsPanel } from "@/components/settings/AgentsPanel";
+import { CardsPanel } from "@/components/settings/CardsPanel";
+import { SkillsPanel } from "@/components/settings/SkillsPanel";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
 
@@ -244,6 +246,26 @@ export function ChatPane() {
           </header>
           <PanelView>
             <AgentsPanel />
+          </PanelView>
+        </>
+      )}
+      {view.kind === "cards" && (
+        <>
+          <header className="h-12 px-4 flex items-center border-b border-[var(--color-border)] font-semibold">
+            角色卡
+          </header>
+          <PanelView>
+            <CardsPanel />
+          </PanelView>
+        </>
+      )}
+      {view.kind === "skills" && (
+        <>
+          <header className="h-12 px-4 flex items-center border-b border-[var(--color-border)] font-semibold">
+            技能
+          </header>
+          <PanelView>
+            <SkillsPanel />
           </PanelView>
         </>
       )}

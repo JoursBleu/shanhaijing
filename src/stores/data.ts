@@ -1,9 +1,11 @@
 import { create } from "zustand";
 import type {
   Agent,
+  CharacterCard,
   Conversation,
   Message,
   Provider,
+  Skill,
   UserPersona,
 } from "@/types/domain";
 import { listProviders } from "@/repos/providers";
@@ -14,12 +16,16 @@ import {
   listConversationAgents,
 } from "@/repos/conversations";
 import { listMessages } from "@/repos/messages";
+import { listCards } from "@/repos/cards";
+import { listSkills } from "@/repos/skills";
 
 interface DataState {
   providers: Provider[];
   personas: UserPersona[];
   agents: Agent[];
   conversations: Conversation[];
+  cards: CharacterCard[];
+  skills: Skill[];
   // by conversation id
   convAgentIds: Record<string, string[]>;
   messagesByConv: Record<string, Message[]>;
@@ -28,6 +34,8 @@ interface DataState {
   reloadPersonas: () => Promise<void>;
   reloadAgents: () => Promise<void>;
   reloadConversations: () => Promise<void>;
+  reloadCards: () => Promise<void>;
+  reloadSkills: () => Promise<void>;
   reloadConvAgents: (convId: string) => Promise<void>;
   reloadMessages: (convId: string) => Promise<void>;
   reloadAll: () => Promise<void>;
@@ -41,6 +49,8 @@ export const useData = create<DataState>((set, get) => ({
   personas: [],
   agents: [],
   conversations: [],
+  cards: [],
+  skills: [],
   convAgentIds: {},
   messagesByConv: {},
 
@@ -49,6 +59,8 @@ export const useData = create<DataState>((set, get) => ({
   reloadAgents: async () => set({ agents: await listAgents() }),
   reloadConversations: async () =>
     set({ conversations: await listConversations() }),
+  reloadCards: async () => set({ cards: await listCards() }),
+  reloadSkills: async () => set({ skills: await listSkills() }),
 
   reloadConvAgents: async (convId) => {
     const rows = await listConversationAgents(convId);
@@ -67,6 +79,8 @@ export const useData = create<DataState>((set, get) => ({
       get().reloadPersonas(),
       get().reloadAgents(),
       get().reloadConversations(),
+      get().reloadCards(),
+      get().reloadSkills(),
     ]);
   },
 

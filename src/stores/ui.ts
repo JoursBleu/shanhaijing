@@ -6,7 +6,9 @@ type ViewKind =
   | { kind: "conversation"; id: ID }
   | { kind: "settings" }
   | { kind: "personas" }
-  | { kind: "agents" };
+  | { kind: "agents" }
+  | { kind: "cards" }
+  | { kind: "skills" };
 
 interface UIState {
   view: ViewKind;

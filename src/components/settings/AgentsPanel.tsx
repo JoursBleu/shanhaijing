@@ -6,6 +6,7 @@ import {
   updateAgent,
 } from "@/repos/agents";
 import { listModels } from "@/repos/providers";
+import { listAgentSkills, setAgentSkills } from "@/repos/skills";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Field } from "@/components/ui/Field";
@@ -21,6 +22,8 @@ interface Draft {
   temperature: number;
   top_p: number;
   max_tokens: string;
+  card_id: string;
+  skill_ids: string[];
 }
 
 const EMPTY: Draft = {
@@ -33,11 +36,15 @@ const EMPTY: Draft = {
   temperature: 0.7,
   top_p: 1,
   max_tokens: "",
+  card_id: "",
+  skill_ids: [],
 };
 
 export function AgentsPanel() {
   const agents = useData((s) => s.agents);
   const providers = useData((s) => s.providers);
+  const cards = useData((s) => s.cards);
+  const skills = useData((s) => s.skills);
   const reload = useData((s) => s.reloadAgents);
 
   const [editing, setEditing] = useState<Draft | null>(null);
@@ -70,7 +77,16 @@ export function AgentsPanel() {
       temperature: a.default_temperature,
       top_p: a.default_top_p,
       max_tokens: a.default_max_tokens?.toString() ?? "",
+      card_id: a.card_id ?? "",
+      skill_ids: [],
     });
+    listAgentSkills(a.id).then((rows) =>
+      setEditing((prev) =>
+        prev && prev.id === a.id
+          ? { ...prev, skill_ids: rows.map((s) => s.id) }
+          : prev,
+      ),
+    );
   }
   async function save() {
     if (!editing || !editing.name.trim() || !editing.provider_id || !editing.model)
@@ -87,9 +103,16 @@ export function AgentsPanel() {
       default_max_tokens: editing.max_tokens
         ? Number(editing.max_tokens)
         : null,
+      card_id: editing.card_id || null,
     };
-    if (editing.id) await updateAgent(editing.id, payload);
-    else await createAgent(payload);
+    let agentId: string;
+    if (editing.id) {
+      await updateAgent(editing.id, payload);
+      agentId = editing.id;
+    } else {
+      agentId = await createAgent(payload);
+    }
+    await setAgentSkills(agentId, editing.skill_ids);
     await reload();
     setEditing(null);
   }
@@ -259,6 +282,61 @@ export function AgentsPanel() {
                   setEditing({ ...editing, max_tokens: e.target.value })
                 }
               />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3">
+            <Field label="角色卡（可选）" hint="选定后会覆盖人格 / 系统提示">
+              <select
+                className="h-9 w-full rounded-md bg-[var(--color-bg-3)] px-2.5 text-sm"
+                value={editing.card_id}
+                onChange={(e) =>
+                  setEditing({ ...editing, card_id: e.target.value })
+                }
+              >
+                <option value="">（不绑卡）</option>
+                {cards.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="技能（可多选）">
+              <div className="space-y-1 max-h-48 overflow-auto border border-[var(--color-border)] rounded p-2">
+                {skills.length === 0 ? (
+                  <div className="text-xs text-[var(--color-text-3)]">
+                    还没有技能，去 📜 里建几个。
+                  </div>
+                ) : (
+                  skills.map((sk) => {
+                    const checked = editing.skill_ids.includes(sk.id);
+                    return (
+                      <label
+                        key={sk.id}
+                        className="flex items-center gap-2 text-sm cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...editing.skill_ids, sk.id]
+                              : editing.skill_ids.filter((x) => x !== sk.id);
+                            setEditing({ ...editing, skill_ids: next });
+                          }}
+                        />
+                        <span>{sk.name}</span>
+                        {sk.description && (
+                          <span className="text-xs text-[var(--color-text-3)] truncate">
+                            — {sk.description}
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })
+                )}
+              </div>
             </Field>
           </div>
 

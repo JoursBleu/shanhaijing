@@ -53,6 +53,20 @@ export function AgentRail() {
       >
         🪪
       </RailIcon>
+      <RailIcon
+        active={view.kind === "cards"}
+        onClick={() => setView({ kind: "cards" })}
+        label="角色卡"
+      >
+        🎴
+      </RailIcon>
+      <RailIcon
+        active={view.kind === "skills"}
+        onClick={() => setView({ kind: "skills" })}
+        label="技能"
+      >
+        📜
+      </RailIcon>
       <div className="flex-1" />
       <RailIcon
         active={view.kind === "settings"}

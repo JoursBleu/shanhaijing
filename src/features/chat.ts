@@ -17,6 +17,8 @@ import {
 import { decryptSecret } from "@/lib/crypto";
 import { streamChat, type ChatMessage } from "@/llm/openai";
 import { buildSystemPrompt } from "@/llm/prompt";
+import { getCard } from "@/repos/cards";
+import { listAgentSkills } from "@/repos/skills";
 
 export interface SendUserMessageInput {
   conversationId: string;
@@ -93,9 +95,11 @@ export async function sendUserMessage(
 
   // 2. build history + system prompt
   const history = await listMessages(conversationId);
+  const card = agent.card_id ? await getCard(agent.card_id) : null;
+  const skills = await listAgentSkills(agent.id);
   const sys: ChatMessage = {
     role: "system",
-    content: buildSystemPrompt({ agent, user: persona }),
+    content: buildSystemPrompt({ agent, user: persona, card, skills }),
   };
   const wire: ChatMessage[] = [sys];
   for (const m of history) {
