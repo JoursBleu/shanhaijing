@@ -34,15 +34,16 @@
 
 ## v0.5 — History power tools
 
-- [ ] Edit / regenerate / branches (swipes)
-- [ ] Folders for agents & conversations
-- [ ] Full-text search over messages
+- [x] Edit / regenerate / branches (swipes)
+- [x] Folders for agents & conversations
+- [x] Full-text search over messages
 
 ## v0.6 — Memory
 
-- [ ] Auto-summary at conversation end
-- [ ] Simple local embedding (sentence-transformers via ONNX or remote)
-- [ ] Retrieval-augmented prompt injection
+- [x] Manual + auto memory entries (fact / summary / preference)
+- [x] One-click "sediment to memory" per conversation (LLM-driven JSON extraction)
+- [x] Naive lexical retrieval (top-K) injected into system prompt
+- [ ] Embedding-based retrieval (deferred to v1.1)
 
 ## v0.7 — Polish
 

@@ -3,6 +3,7 @@ import { useData } from "@/stores/data";
 import { useUI } from "@/stores/ui";
 import { sendMessage } from "@/features/send";
 import { regenerateAssistantMessage } from "@/features/chat";
+import { summarizeConversation } from "@/features/summarize";
 import {
   deleteMessage,
   insertMessage,
@@ -15,6 +16,7 @@ import { PersonasPanel } from "@/components/settings/PersonasPanel";
 import { AgentsPanel } from "@/components/settings/AgentsPanel";
 import { CardsPanel } from "@/components/settings/CardsPanel";
 import { SkillsPanel } from "@/components/settings/SkillsPanel";
+import { MemoriesPanel } from "@/components/settings/MemoriesPanel";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
 
@@ -58,6 +60,7 @@ function ConversationView({ id }: { id: string }) {
 
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const greetingFiredRef = useRef<Set<string>>(new Set());
 
@@ -155,7 +158,7 @@ function ConversationView({ id }: { id: string }) {
         <div className="size-7 rounded-full bg-[var(--color-accent)] flex items-center justify-center text-xs font-bold">
           {isGroup ? "群" : (agent?.name ?? "?").slice(0, 1)}
         </div>
-        <div className="text-[var(--color-text-1)] text-sm">
+        <div className="text-[var(--color-text-1)] text-sm flex-1 min-w-0">
           <span className="font-semibold">{conv.title || "(未命名)"}</span>
           <span className="text-[var(--color-text-3)] ml-2">
             ·{" "}
@@ -168,6 +171,28 @@ function ConversationView({ id }: { id: string }) {
             )}
           </span>
         </div>
+        <button
+          className="text-xs text-[var(--color-text-3)] hover:text-[var(--color-text-1)] disabled:opacity-30"
+          disabled={summarizing || messages.length === 0}
+          title="把这次对话沉淀为 agent 的记忆条目"
+          onClick={async () => {
+            setSummarizing(true);
+            try {
+              const res = await summarizeConversation(id);
+              const total = res.reduce(
+                (a, r) => a + (r.summaryMemoryId ? 1 : 0) + r.factMemoryIds.length + r.preferenceMemoryIds.length,
+                0,
+              );
+              alert(`已写入 ${total} 条记忆。`);
+            } catch (e: any) {
+              alert("总结失败：" + (e?.message ?? e));
+            } finally {
+              setSummarizing(false);
+            }
+          }}
+        >
+          {summarizing ? "总结中…" : "💾 沉淀为记忆"}
+        </button>
       </header>
 
       <div className="flex-1 overflow-y-auto p-3">
@@ -312,6 +337,16 @@ export function ChatPane() {
           </header>
           <PanelView>
             <SkillsPanel />
+          </PanelView>
+        </>
+      )}
+      {view.kind === "memories" && (
+        <>
+          <header className="h-12 px-4 flex items-center border-b border-[var(--color-border)] font-semibold">
+            记忆
+          </header>
+          <PanelView>
+            <MemoriesPanel />
           </PanelView>
         </>
       )}

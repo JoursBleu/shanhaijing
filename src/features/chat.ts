@@ -19,6 +19,7 @@ import { streamChat, type ChatMessage } from "@/llm/openai";
 import { buildSystemPrompt } from "@/llm/prompt";
 import { getCard } from "@/repos/cards";
 import { listAgentSkills } from "@/repos/skills";
+import { retrieveMemoriesForAgent } from "@/repos/memories";
 import { pickActiveVariants } from "@/lib/variants";
 
 export interface SendUserMessageInput {
@@ -97,9 +98,10 @@ export async function sendUserMessage(
   const history = await listMessages(conversationId);
   const card = agent.card_id ? await getCard(agent.card_id) : null;
   const skills = await listAgentSkills(agent.id);
+  const memories = await retrieveMemoriesForAgent(agent.id, content, 5);
   const sys: ChatMessage = {
     role: "system",
-    content: buildSystemPrompt({ agent, user: persona, card, skills, conversation: conv }),
+    content: buildSystemPrompt({ agent, user: persona, card, skills, conversation: conv, memories }),
   };
   const wire: ChatMessage[] = [sys];
   const active = pickActiveVariants(history, input.activeVariants ?? {});
@@ -222,9 +224,17 @@ export async function regenerateAssistantMessage(
   // just before the target group's parent reply.
   const card = agent.card_id ? await getCard(agent.card_id) : null;
   const skills = await listAgentSkills(agent.id);
+  // Use the last user message as the retrieval query (or the target's parent if
+  // no user msg exists).
+  const lastUser = [...all].reverse().find((m) => m.role === "user");
+  const memories = await retrieveMemoriesForAgent(
+    agent.id,
+    lastUser?.content ?? target.content ?? "",
+    5,
+  );
   const sys: ChatMessage = {
     role: "system",
-    content: buildSystemPrompt({ agent, user: persona, card, skills, conversation: conv }),
+    content: buildSystemPrompt({ agent, user: persona, card, skills, conversation: conv, memories }),
   };
 
   // Group prior messages: for each variant group keep active or latest by

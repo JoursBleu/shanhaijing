@@ -67,6 +67,13 @@ export function AgentRail() {
       >
         📜
       </RailIcon>
+      <RailIcon
+        active={view.kind === "memories"}
+        onClick={() => setView({ kind: "memories" })}
+        label="记忆"
+      >
+        🧠
+      </RailIcon>
       <div className="flex-1" />
       <RailIcon
         active={view.kind === "settings"}

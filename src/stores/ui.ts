@@ -8,7 +8,8 @@ type ViewKind =
   | { kind: "personas" }
   | { kind: "agents" }
   | { kind: "cards" }
-  | { kind: "skills" };
+  | { kind: "skills" }
+  | { kind: "memories" };
 
 interface UIState {
   view: ViewKind;

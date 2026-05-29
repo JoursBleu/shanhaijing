@@ -38,6 +38,7 @@ import { buildSystemPrompt } from "@/llm/prompt";
 import { parseAssistantMessage, type AgentRef } from "@/lib/mentions";
 import { getDb } from "@/db";
 import { pickActiveVariants } from "@/lib/variants";
+import { retrieveMemoriesForAgent } from "@/repos/memories";
 import type { Agent } from "@/types/domain";
 
 export interface GroupSendInput {
@@ -201,6 +202,12 @@ async function invokeAgent(args: InvokeArgs): Promise<InvokeResult> {
   // so the LLM can tell speakers apart in a single "assistant" stream.
   const history = await listMessages(conv.id);
   const activeHistory = pickActiveVariants(history, args.activeVariants ?? {});
+  const lastUserMsg = [...activeHistory].reverse().find((m) => m.role === "user");
+  const memories = await retrieveMemoriesForAgent(
+    agent.id,
+    lastUserMsg?.content ?? conv.task_goal ?? "",
+    5,
+  );
   const sys: ChatMessage = {
     role: "system",
     content: buildSystemPrompt({
@@ -210,6 +217,7 @@ async function invokeAgent(args: InvokeArgs): Promise<InvokeResult> {
       skills,
       others: others.map((o) => ({ name: o.name, signature: o.signature })),
       conversation: conv,
+      memories,
     }),
   };
   const agentNameById = new Map(others.map((o) => [o.id, o.name]));
