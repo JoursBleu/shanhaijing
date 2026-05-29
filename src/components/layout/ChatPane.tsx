@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { useData } from "@/stores/data";
 import { useUI } from "@/stores/ui";
 import { sendMessage } from "@/features/send";
+import { regenerateAssistantMessage } from "@/features/chat";
 import {
   deleteMessage,
   insertMessage,
   updateMessageContent,
 } from "@/repos/messages";
+import { groupByVariant, pickActiveVariants } from "@/lib/variants";
 import { MessageBubble } from "@/components/MessageBubble";
 import { ProvidersPanel } from "@/components/settings/ProvidersPanel";
 import { PersonasPanel } from "@/components/settings/PersonasPanel";
@@ -51,6 +53,8 @@ function ConversationView({ id }: { id: string }) {
   const personas = useData((s) => s.personas);
   const reloadMessages = useData((s) => s.reloadMessages);
   const reloadConvAgents = useData((s) => s.reloadConvAgents);
+  const activeVariant = useUI((s) => s.activeVariant);
+  const setActiveVariant = useUI((s) => s.setActiveVariant);
 
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -99,7 +103,11 @@ function ConversationView({ id }: { id: string }) {
     setInput("");
     setSending(true);
     try {
-      await sendMessage({ conversationId: id, content: text });
+      await sendMessage({
+        conversationId: id,
+        content: text,
+        activeVariants: activeVariant,
+      });
     } catch (e: any) {
       alert("发送失败：" + (e?.message ?? e));
     } finally {
@@ -108,21 +116,19 @@ function ConversationView({ id }: { id: string }) {
   }
 
   async function regenerate(messageId: string) {
-    const idx = messages.findIndex((m) => m.id === messageId);
-    if (idx < 0) return;
-    const prevUser = messages
-      .slice(0, idx)
-      .reverse()
-      .find((m) => m.role === "user");
-    if (!prevUser) return;
-    await deleteMessage(messageId);
-    await reloadMessages(id);
     setSending(true);
     try {
-      await sendMessage({
+      const newId = await regenerateAssistantMessage({
         conversationId: id,
-        content: prevUser.content,
+        assistantMessageId: messageId,
+        activeVariants: activeVariant,
       });
+      // Find the group id for this message and set new variant as active.
+      const fresh = useData.getState().messagesByConv[id] ?? [];
+      const m = fresh.find((x) => x.id === messageId);
+      const gid = m?.variant_group_id ?? messageId;
+      setActiveVariant(gid, newId);
+      await reloadMessages(id);
     } catch (e: any) {
       alert("重生成失败：" + (e?.message ?? e));
     } finally {
@@ -171,27 +177,51 @@ function ConversationView({ id }: { id: string }) {
               说点什么开始吧
             </div>
           )}
-          {messages.map((m) => (
-            <MessageBubble
-              key={m.id}
-              role={m.role}
-              name={senderName(m)}
-              content={m.content}
-              streaming={
-                sending &&
-                m.role === "assistant" &&
-                m.id === messages[messages.length - 1]?.id
-              }
-              onSaveEdit={async (newContent) => {
-                await updateMessageContent(m.id, newContent);
-                await reloadMessages(id);
-              }}
-              onRegenerate={
-                m.role === "assistant" ? () => regenerate(m.id) : undefined
-              }
-              onDelete={() => doDelete(m.id)}
-            />
-          ))}
+          {(() => {
+            const visible = pickActiveVariants(messages, activeVariant);
+            const groups = groupByVariant(messages);
+            return visible.map((m) => {
+              const gid = m.variant_group_id ?? m.id;
+              const siblings = (groups.get(gid) ?? []).slice().sort(
+                (a, b) => a.variant_index - b.variant_index,
+              );
+              const total = siblings.length;
+              const idx = siblings.findIndex((s) => s.id === m.id);
+              return (
+                <MessageBubble
+                  key={m.id}
+                  role={m.role}
+                  name={senderName(m)}
+                  content={m.content}
+                  streaming={
+                    sending &&
+                    m.role === "assistant" &&
+                    m.id === visible[visible.length - 1]?.id
+                  }
+                  onSaveEdit={async (newContent) => {
+                    await updateMessageContent(m.id, newContent);
+                    await reloadMessages(id);
+                  }}
+                  onRegenerate={
+                    m.role === "assistant" ? () => regenerate(m.id) : undefined
+                  }
+                  onDelete={() => doDelete(m.id)}
+                  variantIndex={total > 1 ? idx : undefined}
+                  variantTotal={total > 1 ? total : undefined}
+                  onPrevVariant={
+                    total > 1 && idx > 0
+                      ? () => setActiveVariant(gid, siblings[idx - 1]!.id)
+                      : undefined
+                  }
+                  onNextVariant={
+                    total > 1 && idx < total - 1
+                      ? () => setActiveVariant(gid, siblings[idx + 1]!.id)
+                      : undefined
+                  }
+                />
+              );
+            });
+          })()}
           <div ref={bottomRef} />
         </div>
       </div>

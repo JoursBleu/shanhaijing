@@ -37,19 +37,21 @@ import { streamChat, type ChatMessage } from "@/llm/openai";
 import { buildSystemPrompt } from "@/llm/prompt";
 import { parseAssistantMessage, type AgentRef } from "@/lib/mentions";
 import { getDb } from "@/db";
+import { pickActiveVariants } from "@/lib/variants";
 import type { Agent } from "@/types/domain";
 
 export interface GroupSendInput {
   conversationId: string;
   content: string;
   signal?: AbortSignal;
+  activeVariants?: Record<string, string>;
 }
 
 const DEFAULT_MAX_TURNS = 8;
 const DEFAULT_MAX_PER_AGENT = 3;
 
 export async function sendUserMessageInGroup(input: GroupSendInput): Promise<void> {
-  const { conversationId, content, signal } = input;
+  const { conversationId, content, signal, activeVariants } = input;
   const data = useData.getState();
 
   const conv = await getConversation(conversationId);
@@ -131,6 +133,7 @@ export async function sendUserMessageInGroup(input: GroupSendInput): Promise<voi
       convAgentBinding: convAgents.find((c) => c.agent_id === agent.id),
       prevMessageId,
       signal,
+      activeVariants,
     });
 
     perAgentCount.set(agentId, used + 1);
@@ -170,6 +173,7 @@ interface InvokeArgs {
   convAgentBinding: ReturnType<Array<any>["find"]> | undefined;
   prevMessageId: string;
   signal?: AbortSignal;
+  activeVariants?: Record<string, string>;
 }
 
 interface InvokeResult {
@@ -196,6 +200,7 @@ async function invokeAgent(args: InvokeArgs): Promise<InvokeResult> {
   // Build wire history: tag each non-self assistant message with "@Name:" prefix
   // so the LLM can tell speakers apart in a single "assistant" stream.
   const history = await listMessages(conv.id);
+  const activeHistory = pickActiveVariants(history, args.activeVariants ?? {});
   const sys: ChatMessage = {
     role: "system",
     content: buildSystemPrompt({
@@ -211,7 +216,7 @@ async function invokeAgent(args: InvokeArgs): Promise<InvokeResult> {
   agentNameById.set(agent.id, agent.name);
 
   const wire: ChatMessage[] = [sys];
-  for (const m of history) {
+  for (const m of activeHistory) {
     if (m.role === "system") continue;
     if (m.role === "user") {
       wire.push({ role: "user", content: `${persona.name}: ${m.content}` });

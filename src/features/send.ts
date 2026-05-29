@@ -6,6 +6,7 @@ export async function sendMessage(input: {
   conversationId: string;
   content: string;
   signal?: AbortSignal;
+  activeVariants?: Record<string, string>;
 }): Promise<void> {
   const conv = await getConversation(input.conversationId);
   if (!conv) throw new Error("Conversation not found");

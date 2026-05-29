@@ -19,11 +19,13 @@ import { streamChat, type ChatMessage } from "@/llm/openai";
 import { buildSystemPrompt } from "@/llm/prompt";
 import { getCard } from "@/repos/cards";
 import { listAgentSkills } from "@/repos/skills";
+import { pickActiveVariants } from "@/lib/variants";
 
 export interface SendUserMessageInput {
   conversationId: string;
   content: string;
   signal?: AbortSignal;
+  activeVariants?: Record<string, string>;
 }
 
 export interface SendResult {
@@ -100,7 +102,8 @@ export async function sendUserMessage(
     content: buildSystemPrompt({ agent, user: persona, card, skills, conversation: conv }),
   };
   const wire: ChatMessage[] = [sys];
-  for (const m of history) {
+  const active = pickActiveVariants(history, input.activeVariants ?? {});
+  for (const m of active) {
     if (m.role === "system") continue;
     wire.push({
       role: m.role === "user" ? "user" : "assistant",
@@ -176,6 +179,7 @@ export interface RegenerateInput {
   conversationId: string;
   assistantMessageId: string;
   signal?: AbortSignal;
+  activeVariants?: Record<string, string>;
 }
 
 /**
@@ -223,20 +227,12 @@ export async function regenerateAssistantMessage(
     content: buildSystemPrompt({ agent, user: persona, card, skills, conversation: conv }),
   };
 
-  // Group prior messages: for each variant group keep latest by variant_index.
-  const groups = new Map<string, typeof all>();
-  for (const m of all) {
-    if (m.id === assistantMessageId) continue;
-    if ((m.variant_group_id ?? m.id) === groupId) continue; // skip target group entirely
-    const gid = m.variant_group_id ?? m.id;
-    const list = groups.get(gid) ?? [];
-    list.push(m);
-    groups.set(gid, list);
-  }
-  const selected = Array.from(groups.values()).map((arr) =>
-    arr.reduce((a, b) => (a.variant_index > b.variant_index ? a : b)),
+  // Group prior messages: for each variant group keep active or latest by
+  // variant_index. Skip the target group itself.
+  const prior = all.filter(
+    (m) => (m.variant_group_id ?? m.id) !== groupId,
   );
-  // include the parent user message (it's a non-variant user message; group already includes it)
+  const selected = pickActiveVariants(prior, input.activeVariants ?? {});
   selected.sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
   const wire: ChatMessage[] = [sys];
   for (const m of selected) {
