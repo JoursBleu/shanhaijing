@@ -171,3 +171,139 @@ export async function sendUserMessage(
   });
   return { userMessageId, assistantMessageId };
 }
+
+export interface RegenerateInput {
+  conversationId: string;
+  assistantMessageId: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Create a new assistant variant for the given assistant message, in the same
+ * variant group. History is the conversation up to (but not including) the
+ * variant being regenerated; only the "latest" variant per group is used when
+ * building wire history (matches the default UI behavior).
+ */
+export async function regenerateAssistantMessage(
+  input: RegenerateInput,
+): Promise<string> {
+  const { conversationId, assistantMessageId, signal } = input;
+  const data = useData.getState();
+
+  const conv = await getConversation(conversationId);
+  if (!conv) throw new Error("Conversation not found");
+  const persona = await getPersona(conv.user_persona_id);
+  if (!persona) throw new Error("User persona missing");
+  if (conv.kind !== "private") {
+    throw new Error("Group regenerate is not implemented in v0.5");
+  }
+  const convAgents = await listConversationAgents(conversationId);
+  const ca = convAgents[0]!;
+  const agent = await getAgent(ca.agent_id);
+  if (!agent) throw new Error("Agent missing");
+  const provider = await getProvider(ca.provider_id ?? agent.default_provider_id!);
+  if (!provider) throw new Error("Provider missing");
+  const model = ca.model ?? agent.default_model;
+  if (!model) throw new Error("Agent has no model configured");
+
+  const all = await listMessages(conversationId);
+  const target = all.find((m) => m.id === assistantMessageId);
+  if (!target) throw new Error("Assistant message not found");
+  const groupId = target.variant_group_id ?? target.id;
+  const sameGroup = all.filter((m) => (m.variant_group_id ?? m.id) === groupId);
+  const nextIndex =
+    Math.max(0, ...sameGroup.map((m) => m.variant_index)) + 1;
+
+  // Build wire history from latest variant of each prior group, stopping
+  // just before the target group's parent reply.
+  const card = agent.card_id ? await getCard(agent.card_id) : null;
+  const skills = await listAgentSkills(agent.id);
+  const sys: ChatMessage = {
+    role: "system",
+    content: buildSystemPrompt({ agent, user: persona, card, skills, conversation: conv }),
+  };
+
+  // Group prior messages: for each variant group keep latest by variant_index.
+  const groups = new Map<string, typeof all>();
+  for (const m of all) {
+    if (m.id === assistantMessageId) continue;
+    if ((m.variant_group_id ?? m.id) === groupId) continue; // skip target group entirely
+    const gid = m.variant_group_id ?? m.id;
+    const list = groups.get(gid) ?? [];
+    list.push(m);
+    groups.set(gid, list);
+  }
+  const selected = Array.from(groups.values()).map((arr) =>
+    arr.reduce((a, b) => (a.variant_index > b.variant_index ? a : b)),
+  );
+  // include the parent user message (it's a non-variant user message; group already includes it)
+  selected.sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+  const wire: ChatMessage[] = [sys];
+  for (const m of selected) {
+    if (m.role === "system") continue;
+    wire.push({
+      role: m.role === "user" ? "user" : "assistant",
+      content: m.content,
+    });
+  }
+
+  // New variant placeholder
+  const newId_ = await insertMessage({
+    conversation_id: conversationId,
+    role: "assistant",
+    sender_id: agent.id,
+    content: "",
+    parent_id: target.parent_id,
+    in_reply_to_message_id: target.in_reply_to_message_id,
+    variant_group_id: groupId,
+    variant_index: nextIndex,
+  });
+  data.appendMessageLocal(conversationId, {
+    id: newId_,
+    conversation_id: conversationId,
+    role: "assistant",
+    sender_id: agent.id,
+    parent_id: target.parent_id,
+    active_branch_id: null,
+    variant_group_id: groupId,
+    variant_index: nextIndex,
+    content: "",
+    mentioned_agent_ids: "[]",
+    turn_id: null,
+    in_reply_to_message_id: target.in_reply_to_message_id,
+    tokens_in: null,
+    tokens_out: null,
+    cost_cents: null,
+    created_at: new Date().toISOString(),
+  });
+
+  const apiKey = await decryptSecret(provider.api_key_encrypted);
+  let acc = "";
+  let usage: any = undefined;
+  try {
+    for await (const chunk of streamChat({
+      base_url: provider.base_url,
+      api_key: apiKey,
+      model,
+      messages: wire,
+      temperature: ca.temperature ?? agent.default_temperature,
+      top_p: ca.top_p ?? agent.default_top_p,
+      max_tokens: ca.max_tokens ?? agent.default_max_tokens,
+      signal,
+    })) {
+      if (chunk.usage) usage = chunk.usage;
+      if (chunk.delta) {
+        acc += chunk.delta;
+        data.patchMessageLocal(conversationId, newId_, { content: acc });
+      }
+    }
+  } catch (e: any) {
+    acc = acc + (acc ? "\n\n" : "") + `*[error: ${e?.message ?? e}]*`;
+    data.patchMessageLocal(conversationId, newId_, { content: acc });
+  }
+  await updateMessageContent(newId_, acc, {
+    tokens_in: usage?.prompt_tokens,
+    tokens_out: usage?.completion_tokens,
+  });
+  return newId_;
+}

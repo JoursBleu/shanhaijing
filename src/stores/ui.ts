@@ -22,6 +22,14 @@ interface UIState {
 
   streamingMessageId: ID | null;
   setStreamingMessageId: (id: ID | null) => void;
+
+  // group_id -> chosen variant message id
+  activeVariant: Record<string, string>;
+  setActiveVariant: (groupId: string, messageId: string) => void;
+
+  // folder_id -> collapsed?
+  collapsedFolders: Record<string, boolean>;
+  toggleFolder: (folderId: string) => void;
 }
 
 const LS_PERSONA = "shanhaijing.active-persona";
@@ -46,4 +54,17 @@ export const useUI = create<UIState>((set) => ({
 
   streamingMessageId: null,
   setStreamingMessageId: (id) => set({ streamingMessageId: id }),
+
+  activeVariant: {},
+  setActiveVariant: (groupId, messageId) =>
+    set((s) => ({ activeVariant: { ...s.activeVariant, [groupId]: messageId } })),
+
+  collapsedFolders: {},
+  toggleFolder: (folderId) =>
+    set((s) => ({
+      collapsedFolders: {
+        ...s.collapsedFolders,
+        [folderId]: !s.collapsedFolders[folderId],
+      },
+    })),
 }));

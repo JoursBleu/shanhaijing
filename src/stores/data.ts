@@ -3,6 +3,7 @@ import type {
   Agent,
   CharacterCard,
   Conversation,
+  Folder,
   Message,
   Provider,
   Skill,
@@ -18,6 +19,7 @@ import {
 import { listMessages } from "@/repos/messages";
 import { listCards } from "@/repos/cards";
 import { listSkills } from "@/repos/skills";
+import { listFolders } from "@/repos/folders";
 
 interface DataState {
   providers: Provider[];
@@ -26,6 +28,7 @@ interface DataState {
   conversations: Conversation[];
   cards: CharacterCard[];
   skills: Skill[];
+  convFolders: Folder[];
   // by conversation id
   convAgentIds: Record<string, string[]>;
   messagesByConv: Record<string, Message[]>;
@@ -36,6 +39,7 @@ interface DataState {
   reloadConversations: () => Promise<void>;
   reloadCards: () => Promise<void>;
   reloadSkills: () => Promise<void>;
+  reloadFolders: () => Promise<void>;
   reloadConvAgents: (convId: string) => Promise<void>;
   reloadMessages: (convId: string) => Promise<void>;
   reloadAll: () => Promise<void>;
@@ -51,6 +55,7 @@ export const useData = create<DataState>((set, get) => ({
   conversations: [],
   cards: [],
   skills: [],
+  convFolders: [],
   convAgentIds: {},
   messagesByConv: {},
 
@@ -61,6 +66,7 @@ export const useData = create<DataState>((set, get) => ({
     set({ conversations: await listConversations() }),
   reloadCards: async () => set({ cards: await listCards() }),
   reloadSkills: async () => set({ skills: await listSkills() }),
+  reloadFolders: async () => set({ convFolders: await listFolders("conversation") }),
 
   reloadConvAgents: async (convId) => {
     const rows = await listConversationAgents(convId);
@@ -81,6 +87,7 @@ export const useData = create<DataState>((set, get) => ({
       get().reloadConversations(),
       get().reloadCards(),
       get().reloadSkills(),
+      get().reloadFolders(),
     ]);
   },
 
