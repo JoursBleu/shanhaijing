@@ -42,15 +42,13 @@ export async function sendUserMessage(
   const persona = await getPersona(conv.user_persona_id);
   if (!persona) throw new Error("User persona missing");
 
+  if (conv.kind !== "private") {
+    throw new Error("sendUserMessage is for private convs; use sendUserMessageInGroup");
+  }
   const convAgents = await listConversationAgents(conversationId);
-  if (conv.kind === "private" && convAgents.length !== 1) {
+  if (convAgents.length !== 1) {
     throw new Error("Private conversation must have exactly one agent");
   }
-  // v0.2: only private flow implemented.
-  if (conv.kind !== "private") {
-    throw new Error("Group flow lands in v0.4");
-  }
-
   const ca = convAgents[0]!;
   const agent = await getAgent(ca.agent_id);
   if (!agent) throw new Error("Agent missing");
@@ -99,7 +97,7 @@ export async function sendUserMessage(
   const skills = await listAgentSkills(agent.id);
   const sys: ChatMessage = {
     role: "system",
-    content: buildSystemPrompt({ agent, user: persona, card, skills }),
+    content: buildSystemPrompt({ agent, user: persona, card, skills, conversation: conv }),
   };
   const wire: ChatMessage[] = [sys];
   for (const m of history) {

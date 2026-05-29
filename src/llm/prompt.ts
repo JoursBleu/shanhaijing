@@ -4,7 +4,7 @@
  * v0.3: persona_text + (optional) character card + (optional) skills + user persona bio.
  */
 
-import type { Agent, CharacterCard, Skill, UserPersona } from "@/types/domain";
+import type { Agent, CharacterCard, Conversation, Skill, UserPersona } from "@/types/domain";
 import type { CharacterCardV2 } from "@/lib/png";
 
 export interface BuildSystemPromptInput {
@@ -12,6 +12,10 @@ export interface BuildSystemPromptInput {
   user: UserPersona;
   card?: CharacterCard | null;
   skills?: Skill[];
+  /** Other agents present in the conversation (excluding self). Triggers group section. */
+  others?: { name: string; signature?: string }[];
+  /** If provided, the conversation context (used for work/group meta). */
+  conversation?: Pick<Conversation, "kind" | "task_goal" | "task_status"> | null;
 }
 
 function substitute(text: string, agent: Agent, user: UserPersona): string {
@@ -61,6 +65,40 @@ export function buildSystemPrompt(input: BuildSystemPromptInput): string {
     for (const s of skills) {
       parts.push(`### Skill: ${s.name}\n${s.body_markdown.trim()}`);
     }
+  }
+
+  // ---- Group context (if any) ----
+  const others = input.others ?? [];
+  const conv = input.conversation;
+  if (others.length > 0 || (conv && conv.kind !== "private")) {
+    const lines: string[] = ["## Group conversation"];
+    if (conv?.kind === "work") {
+      lines.push(
+        `This is a **work** conversation. Goal: ${conv.task_goal || "(unspecified)"}.`,
+      );
+      lines.push(
+        "When the task is complete, emit a single `<done/>` tag.",
+      );
+    } else if (conv?.kind === "casual") {
+      lines.push("This is a **casual** group chat. Stay social and brief.");
+    }
+    if (others.length > 0) {
+      lines.push("Other agents present:");
+      for (const o of others) {
+        lines.push(`- ${o.name}${o.signature ? ` — ${o.signature}` : ""}`);
+      }
+    }
+    lines.push(
+      "**The human user `" + user.name + "` is ALWAYS present and may interject at any time.**",
+    );
+    lines.push(
+      "Routing rules:\n" +
+        "- To hand off to another agent, mention them with `@name` somewhere in your reply.\n" +
+        "- If you have nothing useful to add this round, emit `<silent/>` and nothing else.\n" +
+        "- If you think the user should reply next, emit `<waiting/>`.\n" +
+        "- Do NOT spam mentions. One or zero is normal.",
+    );
+    parts.push(lines.join("\n"));
   }
 
   // ---- User context ----

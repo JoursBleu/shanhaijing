@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useData } from "@/stores/data";
 import { useUI } from "@/stores/ui";
-import { sendUserMessage } from "@/features/chat";
+import { sendMessage } from "@/features/send";
 import {
   deleteMessage,
   insertMessage,
@@ -69,7 +69,7 @@ function ConversationView({ id }: { id: string }) {
   useEffect(() => {
     if (!conv) return;
     if (messages.length > 0) return;
-    if (convAgentIds.length !== 1) return;
+    if (conv.kind !== "private" || convAgentIds.length !== 1) return;
     if (greetingFiredRef.current.has(id)) return;
     const agent = agents.find((a) => a.id === convAgentIds[0]);
     if (!agent || !agent.greeting) return;
@@ -83,12 +83,14 @@ function ConversationView({ id }: { id: string }) {
       });
       await reloadMessages(id);
     })();
-  }, [id, conv?.id, messages.length, convAgentIds.length]);
+  }, [id, conv?.id, conv?.kind, messages.length, convAgentIds.length]);
 
   if (!conv) return <Welcome />;
 
-  const agent = agents.find((a) => a.id === convAgentIds[0]);
   const persona = personas.find((p) => p.id === conv.user_persona_id);
+  const convAgents = agents.filter((a) => convAgentIds.includes(a.id));
+  const isGroup = conv.kind !== "private";
+  const agent = convAgents[0];
 
   async function send() {
     if (!input.trim() || sending) return;
@@ -96,7 +98,7 @@ function ConversationView({ id }: { id: string }) {
     setInput("");
     setSending(true);
     try {
-      await sendUserMessage({ conversationId: id, content: text });
+      await sendMessage({ conversationId: id, content: text });
     } catch (e: any) {
       alert("发送失败：" + (e?.message ?? e));
     } finally {
@@ -116,7 +118,7 @@ function ConversationView({ id }: { id: string }) {
     await reloadMessages(id);
     setSending(true);
     try {
-      await sendUserMessage({
+      await sendMessage({
         conversationId: id,
         content: prevUser.content,
       });
@@ -144,12 +146,19 @@ function ConversationView({ id }: { id: string }) {
     <>
       <header className="h-12 px-4 flex items-center gap-2 border-b border-[var(--color-border)]">
         <div className="size-7 rounded-full bg-[var(--color-accent)] flex items-center justify-center text-xs font-bold">
-          {(agent?.name ?? "?").slice(0, 1)}
+          {isGroup ? "群" : (agent?.name ?? "?").slice(0, 1)}
         </div>
         <div className="text-[var(--color-text-1)] text-sm">
           <span className="font-semibold">{conv.title || "(未命名)"}</span>
           <span className="text-[var(--color-text-3)] ml-2">
-            · {agent?.name ?? "?"} · 以 {persona?.name ?? "?"} 身份
+            ·{" "}
+            {isGroup
+              ? `${convAgents.map((a) => a.name).join(" · ")} · ${conv.kind === "work" ? "工作" : "闲聊"}`
+              : agent?.name ?? "?"}{" "}
+            · 以 {persona?.name ?? "?"} 身份
+            {conv.kind === "work" && conv.task_status === "done" && (
+              <span className="ml-2 text-[var(--color-accent)]">✓ 已完成</span>
+            )}
           </span>
         </div>
       </header>
@@ -194,7 +203,9 @@ function ConversationView({ id }: { id: string }) {
                 send();
               }
             }}
-            placeholder={`和 ${agent?.name ?? "..."} 说点什么…（Enter 发送，Shift+Enter 换行）`}
+            placeholder={isGroup
+              ? `在群里说点什么…用 @名字 可以点名（Enter 发送）`
+              : `和 ${agent?.name ?? "..."} 说点什么…（Enter 发送，Shift+Enter 换行）`}
             disabled={sending}
           />
           <Button onClick={send} disabled={sending || !input.trim()}>
