@@ -1,16 +1,47 @@
 import { create } from "zustand";
 import type { ID } from "@/types/domain";
 
+type ViewKind =
+  | { kind: "welcome" }
+  | { kind: "conversation"; id: ID }
+  | { kind: "settings" }
+  | { kind: "personas" }
+  | { kind: "agents" };
+
 interface UIState {
-  activeConversationId: ID | null;
-  setActiveConversation: (id: ID | null) => void;
+  view: ViewKind;
+  setView: (v: ViewKind) => void;
+
+  activePersonaId: ID | null;
+  setActivePersonaId: (id: ID | null) => void;
+
   showPromptDebug: boolean;
   togglePromptDebug: () => void;
+
+  streamingMessageId: ID | null;
+  setStreamingMessageId: (id: ID | null) => void;
 }
 
+const LS_PERSONA = "shanhaijing.active-persona";
+
 export const useUI = create<UIState>((set) => ({
-  activeConversationId: null,
-  setActiveConversation: (id) => set({ activeConversationId: id }),
+  view: { kind: "welcome" },
+  setView: (v) => set({ view: v }),
+
+  activePersonaId:
+    typeof localStorage !== "undefined"
+      ? localStorage.getItem(LS_PERSONA)
+      : null,
+  setActivePersonaId: (id) => {
+    if (id) localStorage.setItem(LS_PERSONA, id);
+    else localStorage.removeItem(LS_PERSONA);
+    set({ activePersonaId: id });
+  },
+
   showPromptDebug: false,
-  togglePromptDebug: () => set((s) => ({ showPromptDebug: !s.showPromptDebug })),
+  togglePromptDebug: () =>
+    set((s) => ({ showPromptDebug: !s.showPromptDebug })),
+
+  streamingMessageId: null,
+  setStreamingMessageId: (id) => set({ streamingMessageId: id }),
 }));
