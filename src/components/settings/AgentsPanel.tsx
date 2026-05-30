@@ -200,7 +200,14 @@ export function AgentsPanel() {
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Provider">
+            <Field
+              label="Provider"
+              hint={
+                providers.filter((p) => p.enabled).length === 0
+                  ? "去 ⚙ Providers 填上 base URL + API key 并启用"
+                  : ""
+              }
+            >
               <select
                 className="h-9 w-full rounded-md bg-[var(--color-bg-3)] px-2.5 text-sm"
                 value={editing.provider_id}
@@ -213,13 +220,12 @@ export function AgentsPanel() {
                 }
               >
                 <option value="">（选 provider）</option>
-                {providers
-                  .filter((p) => p.enabled)
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
+                {providers.map((p) => (
+                  <option key={p.id} value={p.id} disabled={!p.enabled}>
+                    {p.name}
+                    {p.enabled ? "" : "（未启用）"}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field
