@@ -33,11 +33,11 @@ function Welcome() {
         <h1 className="text-2xl font-bold text-[var(--color-text-1)]">
           山海经 · Shanhaijing
         </h1>
-        <p>把 LLM 当朋友，而不是工具。当面说话，你永远在场。</p>
+        <p>本地优先的 LLM 聊天客户端。一对一、多 agent 群聊都支持。</p>
         <ol className="list-decimal list-inside text-sm space-y-1">
           <li>去 ⚙ 设置里给一个 provider 填上 API key，并点 "抓模型"</li>
           <li>去 🪪 我的身份 选定/创建一个 "我"</li>
-          <li>去 👥 Agents 建一个好友（选 provider + 模型）</li>
+          <li>去 👥 Agents 建一个 agent（选 provider + 模型）</li>
           <li>在左侧 "+" 开一段对话</li>
         </ol>
       </div>

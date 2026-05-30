@@ -1,9 +1,8 @@
 # 山海经 · Shanhaijing
 
-> 把 AI 当朋友，而不是工具。
-> Treat agents as friends, not tools.
+> 本地优先的 LLM 聊天客户端，IM 形态的多 agent 对话。
 
-一个本地优先（local-first）的 LLM 聊天客户端。形态是 IM——你和 agent 是好友关系，可以一对一聊天，也可以拉群讨论。
+一个本地优先（local-first）的 LLM 聊天客户端。形态是 IM——可以一对一和 agent 聊天，也可以把多个 agent 拉到一个群里讨论。
 
 **Status: v1.0** — see [docs/v1.0-release-notes.md](docs/v1.0-release-notes.md).
 

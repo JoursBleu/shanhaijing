@@ -55,7 +55,7 @@ export function PersonasPanel() {
     <div className="space-y-4">
       <h2 className="text-lg font-semibold">User Personas（我的身份）</h2>
       <p className="text-sm text-[var(--color-text-3)]">
-        你可以有多个"我"——工作的你、写小说的你、和朋友闲聊的你。
+        你可以有多个"我"——工作的你、写小说的你、随手记一笔的你。
         每个对话用哪个身份开场，agent 收到的 <code>{"{{user}}"}</code> 也对应不同。
       </p>
 
