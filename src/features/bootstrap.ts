@@ -6,6 +6,7 @@
 import { getDb } from "@/db";
 import { createProvider, listProviders } from "@/repos/providers";
 import { createPersona, listPersonas } from "@/repos/personas";
+import { seedTemplates } from "@/features/seedTemplates";
 
 const PRESET_PROVIDERS: Array<{
   name: string;
@@ -57,4 +58,8 @@ export async function bootstrap(): Promise<void> {
       bio: "",
     });
   }
+
+  // Seed skill / card / agent / conversation samples (each section no-ops
+  // if its own table is non-empty, so user data is never overwritten).
+  await seedTemplates();
 }
