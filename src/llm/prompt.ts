@@ -119,7 +119,7 @@ export function buildSystemPrompt(input: BuildSystemPromptInput): string {
 
   // ---- User context ----
   parts.push(
-    `## Your conversation partner\nYou are chatting with a human friend named "${user.name}".` +
+    `## Your conversation partner\nYou are chatting with a human user named "${user.name}".` +
       (user.bio
         ? ` Here is what they want you to know about them:\n${user.bio.trim()}`
         : ""),
