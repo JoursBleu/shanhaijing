@@ -50,6 +50,51 @@ export function AgentsPanel() {
   const [editing, setEditing] = useState<Draft | null>(null);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
 
+  // --- Bulk assign default provider/model to unconfigured agents ---
+  const unconfigured = agents.filter(
+    (a) => !a.default_provider_id || !a.default_model,
+  );
+  const [bulkProvider, setBulkProvider] = useState<string>("");
+  const [bulkModel, setBulkModel] = useState<string>("");
+  const [bulkModelOptions, setBulkModelOptions] = useState<string[]>([]);
+  const [bulkOverwrite, setBulkOverwrite] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!bulkProvider) {
+      setBulkModelOptions([]);
+      setBulkModel("");
+      return;
+    }
+    listModels(bulkProvider).then((rows) => {
+      setBulkModelOptions(rows.map((r) => r.name));
+      setBulkModel((m) => (rows.some((r) => r.name === m) ? m : ""));
+    });
+  }, [bulkProvider]);
+
+  async function bulkApply() {
+    if (!bulkProvider || !bulkModel) return;
+    const targets = bulkOverwrite ? agents : unconfigured;
+    if (targets.length === 0) return;
+    setBulkBusy(true);
+    setBulkMsg(null);
+    try {
+      for (const a of targets) {
+        await updateAgent(a.id, {
+          default_provider_id: bulkProvider,
+          default_model: bulkModel,
+        });
+      }
+      await reload();
+      setBulkMsg(`已套用到 ${targets.length} 个 agent`);
+    } catch (e: any) {
+      setBulkMsg(`失败：${e?.message ?? e}`);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   useEffect(() => {
     if (!editing?.provider_id) {
       setModelOptions([]);
@@ -129,6 +174,89 @@ export function AgentsPanel() {
         每个 agent 是一个独立的"人"：名字、签名、人格、默认模型。v0.3
         起可以加角色卡、Skill 和记忆。
       </p>
+
+      {(unconfigured.length > 0 || agents.length > 0) && (
+        <div className="border border-[var(--color-border)] rounded-md p-3 space-y-2 bg-[var(--color-bg-3)]/40">
+          <div className="text-sm font-medium">
+            批量配置
+            {unconfigured.length > 0 ? (
+              <span className="ml-2 text-xs text-[var(--color-warning,#d97706)]">
+                有 {unconfigured.length} / {agents.length} 个 agent 还没选 provider/model
+              </span>
+            ) : (
+              <span className="ml-2 text-xs text-[var(--color-text-3)]">
+                所有 agent 都已配置
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <select
+              className="h-9 rounded-md bg-[var(--color-bg-3)] px-2.5 text-sm"
+              value={bulkProvider}
+              onChange={(e) => setBulkProvider(e.target.value)}
+            >
+              <option value="">（选 provider）</option>
+              {providers.map((p) => (
+                <option key={p.id} value={p.id} disabled={!p.enabled}>
+                  {p.name}
+                  {p.enabled ? "" : "（未启用）"}
+                </option>
+              ))}
+            </select>
+            {bulkModelOptions.length > 0 ? (
+              <select
+                className="h-9 rounded-md bg-[var(--color-bg-3)] px-2.5 text-sm"
+                value={bulkModel}
+                onChange={(e) => setBulkModel(e.target.value)}
+              >
+                <option value="">（选模型）</option>
+                {bulkModelOptions.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <Input
+                value={bulkModel}
+                onChange={(e) => setBulkModel(e.target.value)}
+                placeholder={
+                  bulkProvider
+                    ? "可手动输入模型名（或先去 Providers 抓模型）"
+                    : "先选 provider"
+                }
+              />
+            )}
+          </div>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <label className="flex items-center gap-2 text-xs text-[var(--color-text-3)]">
+              <input
+                type="checkbox"
+                checked={bulkOverwrite}
+                onChange={(e) => setBulkOverwrite(e.target.checked)}
+              />
+              覆盖已配置的 agent
+            </label>
+            <div className="flex items-center gap-2">
+              {bulkMsg && (
+                <span className="text-xs text-[var(--color-text-3)]">{bulkMsg}</span>
+              )}
+              <Button
+                size="sm"
+                disabled={
+                  bulkBusy ||
+                  !bulkProvider ||
+                  !bulkModel ||
+                  (bulkOverwrite ? agents.length === 0 : unconfigured.length === 0)
+                }
+                onClick={bulkApply}
+              >
+                套用到 {bulkOverwrite ? agents.length : unconfigured.length} 个 agent
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ul className="space-y-1">
         {agents.map((a) => {
