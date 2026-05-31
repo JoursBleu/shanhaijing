@@ -57,8 +57,20 @@
 
 - [x] Bug bash (typecheck + vite build clean across all features)
 - [x] Release notes ([v1.0-release-notes.md](v1.0-release-notes.md))
-- [ ] Windows / macOS / Linux installers (run `pnpm tauri build` per host)
+- [x] Windows installers (MSI + NSIS), built on the Windows dev box
+- [ ] macOS / Linux installers (build on those hosts when needed)
 - [ ] Landing page (web download, no app stores)
+
+## v1.0.1 — Onboarding seeds & provider UX (2026-05-31)
+
+- [x] First-run seeds: 11 skills (sourced from awesome-chatgpt-prompts /
+      anthropics/skills / SillyTavern) + 3 cards + 7 agents + 5 sample
+      conversations. See [v1.0.1-onboarding.md](v1.0.1-onboarding.md).
+- [x] Providers panel: modal-based add/edit, empty-state hint, `anthropic`
+      kind in the dropdown, auto-reload on mount.
+- [x] Agents panel: bulk-apply default provider/model to unconfigured
+      agents (one click instead of opening N forms).
+- [x] Drop "agent as friend" marketing copy from release notes & system prompt.
 
 ## v2+ (later)
 

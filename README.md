@@ -4,7 +4,8 @@
 
 一个本地优先（local-first）的 LLM 聊天客户端。形态是 IM——可以一对一和 agent 聊天，也可以把多个 agent 拉到一个群里讨论。
 
-**Status: v1.0** — see [docs/v1.0-release-notes.md](docs/v1.0-release-notes.md).
+**Status: v1.0.1** — see [docs/v1.0.1-onboarding.md](docs/v1.0.1-onboarding.md)
+（v1.0 原始发布说明见 [docs/v1.0-release-notes.md](docs/v1.0-release-notes.md)）。
 
 ## Principles
 
