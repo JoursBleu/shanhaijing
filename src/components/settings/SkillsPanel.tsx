@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { confirmModal } from "@/stores/dialog";
 import { useData } from "@/stores/data";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
@@ -48,7 +49,7 @@ export function SkillsPanel() {
   }
 
   async function remove(id: string) {
-    if (!confirm("删除这个技能？已绑定的 agent 会自动取消绑定。")) return;
+    if (!(await confirmModal({ title: "删除这个技能？", body: "已绑定的 agent 会自动取消绑定。", danger: true }))) return;
     await deleteSkill(id);
     await reloadSkills();
     if (editingId === id) setEditingId(null);

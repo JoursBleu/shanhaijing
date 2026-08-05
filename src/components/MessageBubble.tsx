@@ -9,9 +9,10 @@ import "highlight.js/styles/github-dark.css";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
+import type { MessageRole } from "@/types/domain";
 
 interface Props {
-  role: "user" | "assistant" | "system";
+  role: MessageRole;
   name: string;
   avatar?: string | null;
   content: string;

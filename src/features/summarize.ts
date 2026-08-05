@@ -17,7 +17,7 @@ import { getAgent } from "@/repos/agents";
 import { getPersona } from "@/repos/personas";
 import { getProvider } from "@/repos/providers";
 import { listMessages } from "@/repos/messages";
-import { createMemory } from "@/repos/memories";
+import { createMemoryEmbedded } from "@/features/memoryRetrieval";
 import { decryptSecret } from "@/lib/crypto";
 import { streamChat, type ChatMessage } from "@/llm/openai";
 import type { MemoryKind } from "@/types/domain";
@@ -155,7 +155,7 @@ export async function summarizeConversation(
     const prefIds: string[] = [];
     if (parsed) {
       if (parsed.summary.trim()) {
-        summaryId = await createMemory({
+        summaryId = await createMemoryEmbedded({
           agent_id: agent.id,
           conversation_id: conversationId,
           kind: "summary",
@@ -167,7 +167,7 @@ export async function summarizeConversation(
         const t = f.trim();
         if (!t) continue;
         factIds.push(
-          await createMemory({
+          await createMemoryEmbedded({
             agent_id: agent.id,
             conversation_id: conversationId,
             kind: "fact" as MemoryKind,
@@ -180,7 +180,7 @@ export async function summarizeConversation(
         const t = p.trim();
         if (!t) continue;
         prefIds.push(
-          await createMemory({
+          await createMemoryEmbedded({
             agent_id: agent.id,
             conversation_id: conversationId,
             kind: "preference" as MemoryKind,

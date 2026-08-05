@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { confirmModal } from "@/stores/dialog";
 import { useData } from "@/stores/data";
 import { Button } from "@/components/ui/Button";
 import { parseCharacterCardFromPng } from "@/lib/png";
@@ -36,7 +37,7 @@ export function CardsPanel() {
   }
 
   async function remove(id: string) {
-    if (!confirm("删除这张卡？已绑定该卡的 agent 会自动解绑。")) return;
+    if (!(await confirmModal({ title: "删除这张卡？", body: "已绑定该卡的 agent 会自动解绑。", danger: true }))) return;
     await deleteCard(id);
     await reloadCards();
     setPreview((p) => (p === id ? null : p));

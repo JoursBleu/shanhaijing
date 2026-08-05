@@ -8,9 +8,29 @@
  */
 
 export interface ChatMessage {
-  role: "system" | "user" | "assistant";
+  role: "system" | "user" | "assistant" | "tool";
   content: string;
   name?: string;
+  /** assistant turns that invoke tools */
+  tool_calls?: ToolCall[];
+  /** tool-result messages reference the originating call */
+  tool_call_id?: string;
+}
+
+export interface ToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+
+/** OpenAI function-tool definition sent in the request. */
+export interface ToolDef {
+  type: "function";
+  function: {
+    name: string;
+    description?: string;
+    parameters: Record<string, unknown>;
+  };
 }
 
 export interface ChatRequest {
@@ -21,12 +41,24 @@ export interface ChatRequest {
   temperature?: number;
   top_p?: number;
   max_tokens?: number | null;
+  tools?: ToolDef[];
+  tool_choice?: "auto" | "none" | "required";
   signal?: AbortSignal;
+}
+
+/** A streamed tool_call fragment: id/name arrive on the first delta, arguments accumulate. */
+export interface ToolCallDelta {
+  index: number;
+  id?: string;
+  name?: string;
+  argumentsFragment?: string;
 }
 
 export interface ChatChunk {
   delta: string;
   done: boolean;
+  toolCalls?: ToolCallDelta[];
+  finishReason?: string;
   usage?: { prompt_tokens?: number; completion_tokens?: number };
   raw?: any;
 }
@@ -48,6 +80,10 @@ export async function* streamChat(req: ChatRequest): AsyncGenerator<ChatChunk> {
   if (req.temperature !== undefined) body.temperature = req.temperature;
   if (req.top_p !== undefined) body.top_p = req.top_p;
   if (req.max_tokens) body.max_tokens = req.max_tokens;
+  if (req.tools && req.tools.length > 0) {
+    body.tools = req.tools;
+    body.tool_choice = req.tool_choice ?? "auto";
+  }
 
   const headers: Record<string, string> = {
     "content-type": "application/json",
@@ -89,9 +125,21 @@ export async function* streamChat(req: ChatRequest): AsyncGenerator<ChatChunk> {
       try {
         const j = JSON.parse(data);
         if (j.usage) usage = j.usage;
-        const delta = j.choices?.[0]?.delta?.content;
-        if (typeof delta === "string" && delta.length > 0) {
-          yield { delta, done: false, raw: j };
+        const choice = j.choices?.[0];
+        const d = choice?.delta;
+        const textDelta = typeof d?.content === "string" ? d.content : "";
+        const rawToolCalls = Array.isArray(d?.tool_calls) ? d.tool_calls : null;
+        const toolCalls: ToolCallDelta[] | undefined = rawToolCalls
+          ? rawToolCalls.map((tc: any) => ({
+              index: typeof tc.index === "number" ? tc.index : 0,
+              id: tc.id,
+              name: tc.function?.name,
+              argumentsFragment: tc.function?.arguments,
+            }))
+          : undefined;
+        const finishReason: string | undefined = choice?.finish_reason ?? undefined;
+        if (textDelta || toolCalls || finishReason) {
+          yield { delta: textDelta, done: false, toolCalls, finishReason, raw: j };
         }
       } catch {
         // ignore malformed chunk

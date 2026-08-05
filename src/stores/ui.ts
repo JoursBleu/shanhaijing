@@ -9,7 +9,12 @@ type ViewKind =
   | { kind: "agents" }
   | { kind: "cards" }
   | { kind: "skills" }
-  | { kind: "memories" };
+  | { kind: "memories" }
+  | { kind: "mcp" }
+  | { kind: "knowledge" }
+  | { kind: "compare" }
+  | { kind: "translate" }
+  | { kind: "backup" };
 
 interface UIState {
   view: ViewKind;

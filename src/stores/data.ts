@@ -48,6 +48,32 @@ interface DataState {
   patchMessageLocal: (convId: string, id: string, patch: Partial<Message>) => void;
 }
 
+/** Optimistic row for the streaming UI, before the DB row is read back. */
+export function localMessage(
+  m: Pick<Message, "id" | "conversation_id" | "role" | "content"> &
+    Partial<Message>,
+): Message {
+  return {
+    sender_id: null,
+    parent_id: null,
+    active_branch_id: null,
+    variant_group_id: null,
+    variant_index: 0,
+    mentioned_agent_ids: "[]",
+    turn_id: null,
+    in_reply_to_message_id: null,
+    tokens_in: null,
+    tokens_out: null,
+    cost_cents: null,
+    tool_calls_json: null,
+    tool_call_id: null,
+    tool_name: null,
+    hidden: false,
+    created_at: new Date().toISOString(),
+    ...m,
+  };
+}
+
 export const useData = create<DataState>((set, get) => ({
   providers: [],
   personas: [],

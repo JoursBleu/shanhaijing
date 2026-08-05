@@ -4,8 +4,75 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri + React + Typescript</title>
+    <title>山海经 · Shanhaijing</title>
+    <script>
+      // Boot diagnostic: if the app fails to mount (blank window), surface why
+      // on-screen instead of a silent blank. Auto-removes once React mounts ok.
+      (function () {
+        window.__diagErrors = [];
+        function render() {
+          try {
+            var root = document.getElementById("root");
+            var mounted = !!(root && root.children && root.children.length > 0);
+            var ex = document.getElementById("__diag");
+            if (mounted && window.__diagErrors.length === 0) {
+              if (ex) ex.remove();
+              return;
+            }
+            var pre = ex;
+            if (!pre) {
+              pre = document.createElement("pre");
+              pre.id = "__diag";
+              pre.style.cssText =
+                "position:fixed;left:0;top:0;right:0;bottom:0;margin:0;padding:16px;white-space:pre-wrap;word-break:break-word;background:#0b0b0b;color:#7CFC00;font:12px/1.5 ui-monospace,Consolas,monospace;z-index:2147483647;overflow:auto";
+              (document.body || document.documentElement).appendChild(pre);
+            }
+            pre.textContent =
+              "山海经 启动诊断 (shanhaijing boot diagnostic)\n" +
+              "--------------------------------------------\n" +
+              "moduleScriptRan : " + !!window.__moduleRan + "\n" +
+              "reactMounted    : " + mounted + "\n" +
+              "stylesheets     : " + document.styleSheets.length + "\n" +
+              "tauriInternals  : " + !!window.__TAURI_INTERNALS__ + "\n" +
+              "url             : " + location.href + "\n" +
+              "userAgent       : " + navigator.userAgent + "\n" +
+              "--------------------------------------------\n" +
+              "errors (" + window.__diagErrors.length + "):\n" +
+              (window.__diagErrors.join("\n\n") || "(none captured)");
+          } catch (e) {}
+        }
+        window.__diagRender = render;
+        window.addEventListener(
+          "error",
+          function (e) {
+            var msg = e && e.message ? e.message : "resource load error";
+            var extra =
+              e && e.error && e.error.stack
+                ? e.error.stack
+                : e && e.target && (e.target.src || e.target.href)
+                ? "failed to load: " + (e.target.src || e.target.href)
+                : e && e.filename
+                ? e.filename + ":" + e.lineno + ":" + e.colno
+                : "";
+            window.__diagErrors.push("[error] " + msg + "\n" + extra);
+            render();
+          },
+          true
+        );
+        window.addEventListener("unhandledrejection", function (e) {
+          var r = e && e.reason;
+          window.__diagErrors.push(
+            "[promise] " + (r && r.stack ? r.stack : String(r))
+          );
+          render();
+        });
+        window.addEventListener("DOMContentLoaded", function () {
+          setTimeout(render, 2000);
+        });
+      })();
+    </script>
   </head>
+
 
   <body>
     <div id="root"></div>

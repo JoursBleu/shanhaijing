@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { confirmModal, alertModal } from "@/stores/dialog";
 import { useData } from "@/stores/data";
 import { useUI } from "@/stores/ui";
 import { sendMessage } from "@/features/send";
@@ -22,9 +23,18 @@ import { AgentsPanel } from "@/components/settings/AgentsPanel";
 import { CardsPanel } from "@/components/settings/CardsPanel";
 import { SkillsPanel } from "@/components/settings/SkillsPanel";
 import { MemoriesPanel } from "@/components/settings/MemoriesPanel";
+import { McpPanel } from "@/components/settings/McpPanel";
+import { KnowledgePanel } from "@/components/settings/KnowledgePanel";
+import { ComparePanel } from "@/components/settings/ComparePanel";
+import { TranslatePanel } from "@/components/settings/TranslatePanel";
+import { BackupPanel } from "@/components/settings/BackupPanel";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+
+// Stable empty reference: returning a fresh `[]` from a Zustand selector makes
+// useSyncExternalStore see a new snapshot every render → infinite loop (React #185).
+const EMPTY: never[] = [];
 
 function Welcome() {
   return (
@@ -55,8 +65,8 @@ function PanelView({ children }: { children: React.ReactNode }) {
 
 function ConversationView({ id }: { id: string }) {
   const conv = useData((s) => s.conversations.find((c) => c.id === id));
-  const messages = useData((s) => s.messagesByConv[id] ?? []);
-  const convAgentIds = useData((s) => s.convAgentIds[id] ?? []);
+  const messages = useData((s) => s.messagesByConv[id] ?? EMPTY);
+  const convAgentIds = useData((s) => s.convAgentIds[id] ?? EMPTY);
   const agents = useData((s) => s.agents);
   const personas = useData((s) => s.personas);
   const reloadMessages = useData((s) => s.reloadMessages);
@@ -119,7 +129,7 @@ function ConversationView({ id }: { id: string }) {
         activeVariants: activeVariant,
       });
     } catch (e: any) {
-      alert("发送失败：" + (e?.message ?? e));
+      void alertModal({ title: "发送失败", body: String(e?.message ?? e) });
     } finally {
       setSending(false);
     }
@@ -140,14 +150,14 @@ function ConversationView({ id }: { id: string }) {
       setActiveVariant(gid, newId);
       await reloadMessages(id);
     } catch (e: any) {
-      alert("重生成失败：" + (e?.message ?? e));
+      void alertModal({ title: "重生成失败", body: String(e?.message ?? e) });
     } finally {
       setSending(false);
     }
   }
 
   async function doDelete(messageId: string) {
-    if (!confirm("删除这条消息？")) return;
+    if (!(await confirmModal({ title: "删除这条消息？", danger: true }))) return;
     await deleteMessage(messageId);
     await reloadMessages(id);
   }
@@ -190,9 +200,9 @@ function ConversationView({ id }: { id: string }) {
                 (a, r) => a + (r.summaryMemoryId ? 1 : 0) + r.factMemoryIds.length + r.preferenceMemoryIds.length,
                 0,
               );
-              alert(`已写入 ${total} 条记忆。`);
+              void alertModal({ title: `已写入 ${total} 条记忆。` });
             } catch (e: any) {
-              alert("总结失败：" + (e?.message ?? e));
+              void alertModal({ title: "总结失败", body: String(e?.message ?? e) });
             } finally {
               setSummarizing(false);
             }
@@ -222,7 +232,7 @@ function ConversationView({ id }: { id: string }) {
               const debug = await buildPromptDebug(id);
               setPromptDebug(debug);
             } catch (e: any) {
-              alert("调试失败：" + (e?.message ?? e));
+              void alertModal({ title: "调试失败", body: String(e?.message ?? e) });
             }
           }}
         >
@@ -406,6 +416,56 @@ export function ChatPane() {
           </header>
           <PanelView>
             <MemoriesPanel />
+          </PanelView>
+        </>
+      )}
+      {view.kind === "mcp" && (
+        <>
+          <header className="h-12 px-4 flex items-center border-b border-[var(--color-border)] font-semibold">
+            MCP
+          </header>
+          <PanelView>
+            <McpPanel />
+          </PanelView>
+        </>
+      )}
+      {view.kind === "knowledge" && (
+        <>
+          <header className="h-12 px-4 flex items-center border-b border-[var(--color-border)] font-semibold">
+            知识库
+          </header>
+          <PanelView>
+            <KnowledgePanel />
+          </PanelView>
+        </>
+      )}
+      {view.kind === "compare" && (
+        <>
+          <header className="h-12 px-4 flex items-center border-b border-[var(--color-border)] font-semibold">
+            多模型同问
+          </header>
+          <PanelView>
+            <ComparePanel />
+          </PanelView>
+        </>
+      )}
+      {view.kind === "translate" && (
+        <>
+          <header className="h-12 px-4 flex items-center border-b border-[var(--color-border)] font-semibold">
+            AI 翻译
+          </header>
+          <PanelView>
+            <TranslatePanel />
+          </PanelView>
+        </>
+      )}
+      {view.kind === "backup" && (
+        <>
+          <header className="h-12 px-4 flex items-center border-b border-[var(--color-border)] font-semibold">
+            备份与恢复
+          </header>
+          <PanelView>
+            <BackupPanel />
           </PanelView>
         </>
       )}

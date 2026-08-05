@@ -1,15 +1,20 @@
 import { useEffect, useState } from "react";
+import { confirmModal } from "@/stores/dialog";
 import { useData } from "@/stores/data";
 import {
   createAgent,
   deleteAgent,
   updateAgent,
+  listAgentKbIds,
+  setAgentKbIds,
 } from "@/repos/agents";
 import { listModels } from "@/repos/providers";
 import { listAgentSkills, setAgentSkills } from "@/repos/skills";
+import { listKnowledgeBases, type KnowledgeBase } from "@/repos/knowledge";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Field } from "@/components/ui/Field";
+import type { McpMode, ToolMode } from "@/types/domain";
 
 interface Draft {
   id?: string;
@@ -24,6 +29,10 @@ interface Draft {
   max_tokens: string;
   card_id: string;
   skill_ids: string[];
+  tool_mode: ToolMode;
+  mcp_mode: McpMode;
+  max_tool_calls: number;
+  kb_ids: string[];
 }
 
 const EMPTY: Draft = {
@@ -38,6 +47,10 @@ const EMPTY: Draft = {
   max_tokens: "",
   card_id: "",
   skill_ids: [],
+  tool_mode: "auto",
+  mcp_mode: "auto",
+  max_tool_calls: 6,
+  kb_ids: [],
 };
 
 export function AgentsPanel() {
@@ -49,6 +62,11 @@ export function AgentsPanel() {
 
   const [editing, setEditing] = useState<Draft | null>(null);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
+  const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
+
+  useEffect(() => {
+    listKnowledgeBases().then(setKbs);
+  }, []);
 
   // --- Bulk assign default provider/model to unconfigured agents ---
   const unconfigured = agents.filter(
@@ -124,12 +142,21 @@ export function AgentsPanel() {
       max_tokens: a.default_max_tokens?.toString() ?? "",
       card_id: a.card_id ?? "",
       skill_ids: [],
+      tool_mode: a.tool_mode,
+      mcp_mode: a.mcp_mode,
+      max_tool_calls: a.max_tool_calls,
+      kb_ids: [],
     });
     listAgentSkills(a.id).then((rows) =>
       setEditing((prev) =>
         prev && prev.id === a.id
           ? { ...prev, skill_ids: rows.map((s) => s.id) }
           : prev,
+      ),
+    );
+    listAgentKbIds(a.id).then((ids) =>
+      setEditing((prev) =>
+        prev && prev.id === a.id ? { ...prev, kb_ids: ids } : prev,
       ),
     );
   }
@@ -149,6 +176,9 @@ export function AgentsPanel() {
         ? Number(editing.max_tokens)
         : null,
       card_id: editing.card_id || null,
+      tool_mode: editing.tool_mode,
+      mcp_mode: editing.mcp_mode,
+      max_tool_calls: editing.max_tool_calls,
     };
     let agentId: string;
     if (editing.id) {
@@ -158,11 +188,12 @@ export function AgentsPanel() {
       agentId = await createAgent(payload);
     }
     await setAgentSkills(agentId, editing.skill_ids);
+    await setAgentKbIds(agentId, editing.kb_ids);
     await reload();
     setEditing(null);
   }
   async function remove(id: string) {
-    if (!confirm("删除这个 agent？所有相关对话也会随之删除。")) return;
+    if (!(await confirmModal({ title: "删除这个 agent？", body: "所有相关对话也会随之删除。", danger: true }))) return;
     await deleteAgent(id);
     await reload();
   }
@@ -470,6 +501,93 @@ export function AgentsPanel() {
                     );
                   })
                 )}
+              </div>
+            </Field>
+            <Field
+              label="能力"
+              hint="决定这个 agent 能调用哪些工具、能检索哪些知识库"
+            >
+              <div className="space-y-2 border border-[var(--color-border)] rounded p-2">
+                <div className="grid grid-cols-3 gap-2">
+                  <label className="text-xs text-[var(--color-text-3)] space-y-1">
+                    <span>内置工具</span>
+                    <select
+                      className="h-8 w-full rounded-md bg-[var(--color-bg-3)] px-2 text-sm text-[var(--color-text-1)]"
+                      value={editing.tool_mode}
+                      onChange={(e) =>
+                        setEditing({
+                          ...editing,
+                          tool_mode: e.target.value as ToolMode,
+                        })
+                      }
+                    >
+                      <option value="auto">自动</option>
+                      <option value="disabled">关闭</option>
+                    </select>
+                  </label>
+                  <label className="text-xs text-[var(--color-text-3)] space-y-1">
+                    <span>MCP 工具</span>
+                    <select
+                      className="h-8 w-full rounded-md bg-[var(--color-bg-3)] px-2 text-sm text-[var(--color-text-1)]"
+                      value={editing.mcp_mode}
+                      onChange={(e) =>
+                        setEditing({
+                          ...editing,
+                          mcp_mode: e.target.value as McpMode,
+                        })
+                      }
+                    >
+                      <option value="auto">自动</option>
+                      <option value="manual">手动挑选</option>
+                      <option value="disabled">关闭</option>
+                    </select>
+                  </label>
+                  <label className="text-xs text-[var(--color-text-3)] space-y-1">
+                    <span>单轮工具上限</span>
+                    <Input
+                      type="number"
+                      className="h-8"
+                      value={editing.max_tool_calls}
+                      onChange={(e) =>
+                        setEditing({
+                          ...editing,
+                          max_tool_calls: Number(e.target.value) || 6,
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-[var(--color-text-3)]">
+                    知识库（未勾选则该 agent 不会拿到 search_knowledge 工具）
+                  </div>
+                  {kbs.length === 0 ? (
+                    <div className="text-xs text-[var(--color-text-3)]">
+                      还没有知识库，去 📚 里建一个。
+                    </div>
+                  ) : (
+                    kbs.map((kb) => (
+                      <label
+                        key={kb.id}
+                        className="flex items-center gap-2 text-sm cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={editing.kb_ids.includes(kb.id)}
+                          onChange={(e) =>
+                            setEditing({
+                              ...editing,
+                              kb_ids: e.target.checked
+                                ? [...editing.kb_ids, kb.id]
+                                : editing.kb_ids.filter((x) => x !== kb.id),
+                            })
+                          }
+                        />
+                        <span>{kb.name}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
               </div>
             </Field>
           </div>

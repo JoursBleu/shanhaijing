@@ -32,6 +32,11 @@ export interface UserPersona {
   created_at: string;
 }
 
+/** Whether an agent may call built-in tools. */
+export type ToolMode = "disabled" | "auto";
+/** `manual` exposes only the MCP tools named in `enabled_tools_json`. */
+export type McpMode = "disabled" | "auto" | "manual";
+
 export interface Agent {
   id: ID;
   name: string;
@@ -47,6 +52,11 @@ export interface Agent {
   greeting: string | null;
   memory_enabled: boolean;
   folder_id: ID | null;
+  tool_mode: ToolMode;
+  mcp_mode: McpMode;
+  max_tool_calls: number;
+  /** JSON string[] whitelist of tool names; null = every tool of an enabled kind. */
+  enabled_tools_json: string | null;
   created_at: string;
 }
 
@@ -117,7 +127,7 @@ export interface ConversationAgent {
   top_p: number | null;
 }
 
-export type MessageRole = "user" | "assistant" | "system";
+export type MessageRole = "user" | "assistant" | "system" | "tool";
 
 export interface Message {
   id: ID;
@@ -135,6 +145,13 @@ export interface Message {
   tokens_in: number | null;
   tokens_out: number | null;
   cost_cents: number | null;
+  /** Assistant turns that invoked tools: JSON of the wire-format tool_calls. */
+  tool_calls_json: string | null;
+  /** Tool-result rows: the call they answer. */
+  tool_call_id: ID | null;
+  tool_name: string | null;
+  /** Tool plumbing rows are replayed to the model but not rendered in the UI. */
+  hidden: boolean;
   created_at: string;
 }
 
@@ -147,6 +164,7 @@ export interface Memory {
   kind: MemoryKind;
   content: string;
   embedding: Uint8Array | null;
+  embedding_json?: string | null;
   importance: number;
   created_at: string;
 }

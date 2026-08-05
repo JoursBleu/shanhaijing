@@ -13,14 +13,21 @@ import {
   insertMessage,
   updateMessageContent,
   listMessages,
+  listToolMessages,
+  localMessage,
 } from "@/repos/messages";
 import { decryptSecret } from "@/lib/crypto";
 import { streamChat, type ChatMessage } from "@/llm/openai";
 import { buildSystemPrompt } from "@/llm/prompt";
 import { getCard } from "@/repos/cards";
 import { listAgentSkills } from "@/repos/skills";
-import { retrieveMemoriesForAgent } from "@/repos/memories";
+import { retrieveMemories as retrieveMemoriesForAgent } from "@/features/memoryRetrieval";
 import { pickActiveVariants } from "@/lib/variants";
+import { regenerateAssistantMessageInGroup } from "@/features/groupChat";
+import { runAgentTurn } from "@/features/agentLoop";
+import { resolveAgentTools } from "@/features/agentTools";
+import { buildWireHistory, persistToolMessages } from "@/features/wireHistory";
+import { confirmModal } from "@/stores/dialog";
 
 export interface SendUserMessageInput {
   conversationId: string;
@@ -75,24 +82,16 @@ export async function sendUserMessage(
     sender_id: persona.id,
     content,
   });
-  data.appendMessageLocal(conversationId, {
-    id: userMessageId,
-    conversation_id: conversationId,
-    role: "user",
-    sender_id: persona.id,
-    parent_id: null,
-    active_branch_id: null,
-    variant_group_id: null,
-    variant_index: 0,
-    content,
-    mentioned_agent_ids: "[]",
-    turn_id: null,
-    in_reply_to_message_id: null,
-    tokens_in: null,
-    tokens_out: null,
-    cost_cents: null,
-    created_at: new Date().toISOString(),
-  });
+  data.appendMessageLocal(
+    conversationId,
+    localMessage({
+      id: userMessageId,
+      conversation_id: conversationId,
+      role: "user",
+      sender_id: persona.id,
+      content,
+    }),
+  );
 
   // 2. build history + system prompt
   const history = await listMessages(conversationId);
@@ -103,15 +102,13 @@ export async function sendUserMessage(
     role: "system",
     content: buildSystemPrompt({ agent, user: persona, card, skills, conversation: conv, memories }),
   };
-  const wire: ChatMessage[] = [sys];
-  const active = pickActiveVariants(history, input.activeVariants ?? {});
-  for (const m of active) {
-    if (m.role === "system") continue;
-    wire.push({
-      role: m.role === "user" ? "user" : "assistant",
-      content: m.content,
-    });
-  }
+  const wire: ChatMessage[] = [
+    sys,
+    ...buildWireHistory(
+      pickActiveVariants(history, input.activeVariants ?? {}),
+      await listToolMessages(conversationId),
+    ),
+  ];
 
   // 3. open assistant placeholder
   const assistantMessageId = await insertMessage({
@@ -122,48 +119,69 @@ export async function sendUserMessage(
     parent_id: userMessageId,
     in_reply_to_message_id: userMessageId,
   });
-  data.appendMessageLocal(conversationId, {
-    id: assistantMessageId,
-    conversation_id: conversationId,
-    role: "assistant",
-    sender_id: agent.id,
-    parent_id: userMessageId,
-    active_branch_id: null,
-    variant_group_id: null,
-    variant_index: 0,
-    content: "",
-    mentioned_agent_ids: "[]",
-    turn_id: null,
-    in_reply_to_message_id: userMessageId,
-    tokens_in: null,
-    tokens_out: null,
-    cost_cents: null,
-    created_at: new Date().toISOString(),
-  });
+  data.appendMessageLocal(
+    conversationId,
+    localMessage({
+      id: assistantMessageId,
+      conversation_id: conversationId,
+      role: "assistant",
+      sender_id: agent.id,
+      content: "",
+      parent_id: userMessageId,
+      in_reply_to_message_id: userMessageId,
+    }),
+  );
 
-  // 4. stream
+  // 4. run the agent turn (tool-calling loop; degrades to a plain stream if the
+  //    model doesn't support tools or none are registered).
   const apiKey = await decryptSecret(provider.api_key_encrypted);
+  const caps = await resolveAgentTools(agent);
   let acc = "";
   let usage: any = undefined;
   try {
-    for await (const chunk of streamChat({
+    const result = await runAgentTurn({
       base_url: provider.base_url,
       api_key: apiKey,
       model,
       messages: wire,
+      tools: caps.tools,
+      maxRounds: caps.maxRounds,
+      knowledgeBaseIds: caps.knowledgeBaseIds,
       temperature,
       top_p,
       max_tokens,
+      conversationId,
+      agentId: agent.id,
       signal,
-    })) {
-      if (chunk.usage) usage = chunk.usage;
-      if (chunk.delta) {
-        acc += chunk.delta;
+      approve: async ({ name, args }) => {
+        let a = "";
+        try {
+          a = JSON.stringify(args);
+        } catch {
+          a = String(args);
+        }
+        return confirmModal({
+          title: `允许 agent 调用工具「${name}」？`,
+          body: `参数：${a}`,
+          confirmText: "允许",
+          cancelText: "拒绝",
+        });
+      },
+      onText: (full) => {
+        acc = full;
         data.patchMessageLocal(conversationId, assistantMessageId, {
           content: acc,
         });
-      }
-    }
+      },
+    });
+    acc = result.text;
+    usage = result.usage;
+    await persistToolMessages({
+      conversationId,
+      turnId: assistantMessageId,
+      senderId: agent.id,
+      messages: result.toolMessages,
+    });
   } catch (e: any) {
     acc = acc + (acc ? "\n\n" : "") + `*[error: ${e?.message ?? e}]*`;
     data.patchMessageLocal(conversationId, assistantMessageId, { content: acc });
@@ -201,7 +219,7 @@ export async function regenerateAssistantMessage(
   const persona = await getPersona(conv.user_persona_id);
   if (!persona) throw new Error("User persona missing");
   if (conv.kind !== "private") {
-    throw new Error("Group regenerate is not implemented in v0.5");
+    return regenerateAssistantMessageInGroup(input);
   }
   const convAgents = await listConversationAgents(conversationId);
   const ca = convAgents[0]!;
@@ -264,24 +282,20 @@ export async function regenerateAssistantMessage(
     variant_group_id: groupId,
     variant_index: nextIndex,
   });
-  data.appendMessageLocal(conversationId, {
-    id: newId_,
-    conversation_id: conversationId,
-    role: "assistant",
-    sender_id: agent.id,
-    parent_id: target.parent_id,
-    active_branch_id: null,
-    variant_group_id: groupId,
-    variant_index: nextIndex,
-    content: "",
-    mentioned_agent_ids: "[]",
-    turn_id: null,
-    in_reply_to_message_id: target.in_reply_to_message_id,
-    tokens_in: null,
-    tokens_out: null,
-    cost_cents: null,
-    created_at: new Date().toISOString(),
-  });
+  data.appendMessageLocal(
+    conversationId,
+    localMessage({
+      id: newId_,
+      conversation_id: conversationId,
+      role: "assistant",
+      sender_id: agent.id,
+      content: "",
+      parent_id: target.parent_id,
+      in_reply_to_message_id: target.in_reply_to_message_id,
+      variant_group_id: groupId,
+      variant_index: nextIndex,
+    }),
+  );
 
   const apiKey = await decryptSecret(provider.api_key_encrypted);
   let acc = "";

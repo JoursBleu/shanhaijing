@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AgentRail } from "@/components/layout/AgentRail";
 import { ConversationList } from "@/components/layout/ConversationList";
 import { ChatPane } from "@/components/layout/ChatPane";
+import { DialogHost } from "@/components/DialogHost";
 import { bootstrap } from "@/features/bootstrap";
 import { useData } from "@/stores/data";
 import { useUI } from "@/stores/ui";
@@ -53,6 +54,7 @@ export default function App() {
       <AgentRail />
       <ConversationList />
       <ChatPane />
+      <DialogHost />
     </div>
   );
 }

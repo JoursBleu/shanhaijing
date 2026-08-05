@@ -29,6 +29,17 @@ export async function createMemory(input: CreateMemoryInput): Promise<string> {
   return id;
 }
 
+export async function setMemoryEmbedding(
+  id: string,
+  vec: number[],
+): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE memories SET embedding_json = ? WHERE id = ?", [
+    JSON.stringify(vec),
+    id,
+  ]);
+}
+
 export async function listMemoriesForAgent(
   agentId: string,
   opts: { limit?: number; kinds?: MemoryKind[] } = {},

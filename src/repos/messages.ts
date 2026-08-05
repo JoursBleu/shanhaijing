@@ -12,6 +12,12 @@ export interface InsertMessageInput {
   in_reply_to_message_id?: string | null;
   variant_group_id?: string | null;
   variant_index?: number;
+  turn_id?: string | null;
+  tool_calls_json?: string | null;
+  tool_call_id?: string | null;
+  tool_name?: string | null;
+  /** Tool plumbing: replayed to the model, never rendered. */
+  hidden?: boolean;
 }
 
 export async function insertMessage(
@@ -23,13 +29,15 @@ export async function insertMessage(
   // (i.e. it is its own first variant); regenerate reuses the same group id
   // with an incremented variant_index.
   const groupId =
-    input.variant_group_id ?? (input.role === "assistant" ? id : null);
+    input.variant_group_id ??
+    (input.role === "assistant" && !input.hidden ? id : null);
   await db.execute(
     `INSERT INTO messages
      (id, conversation_id, role, sender_id, parent_id, content,
       mentioned_agent_ids, in_reply_to_message_id,
-      variant_group_id, variant_index)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      variant_group_id, variant_index, turn_id,
+      tool_calls_json, tool_call_id, tool_name, hidden)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       input.conversation_id,
@@ -41,6 +49,11 @@ export async function insertMessage(
       input.in_reply_to_message_id ?? null,
       groupId,
       input.variant_index ?? 0,
+      input.turn_id ?? null,
+      input.tool_calls_json ?? null,
+      input.tool_call_id ?? null,
+      input.tool_name ?? null,
+      input.hidden ? 1 : 0,
     ],
   );
   await db.execute(
@@ -81,10 +94,55 @@ export async function listMessages(
   conversationId: string,
 ): Promise<Message[]> {
   const db = await getDb();
-  return db.select<Message[]>(
-    "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at, id",
+  const rows = await db.select<Message[]>(
+    "SELECT * FROM messages WHERE conversation_id = ? AND hidden = 0 ORDER BY created_at, id",
     [conversationId],
   );
+  return rows.map(rowToMessage);
+}
+
+/** Hidden tool plumbing rows, keyed by the assistant turn that produced them. */
+export async function listToolMessages(
+  conversationId: string,
+): Promise<Message[]> {
+  const db = await getDb();
+  const rows = await db.select<Message[]>(
+    "SELECT * FROM messages WHERE conversation_id = ? AND hidden = 1 ORDER BY created_at, id",
+    [conversationId],
+  );
+  return rows.map(rowToMessage);
+}
+
+function rowToMessage(r: any): Message {
+  return { ...r, hidden: !!r.hidden } as Message;
+}
+
+/** Optimistic store row mirroring what `insertMessage` just wrote. */
+export function localMessage(
+  input: Pick<
+    Message,
+    "id" | "conversation_id" | "role" | "sender_id" | "content"
+  > &
+    Partial<Message>,
+): Message {
+  return {
+    parent_id: null,
+    active_branch_id: null,
+    variant_group_id: null,
+    variant_index: 0,
+    mentioned_agent_ids: "[]",
+    turn_id: null,
+    in_reply_to_message_id: null,
+    tokens_in: null,
+    tokens_out: null,
+    cost_cents: null,
+    tool_calls_json: null,
+    tool_call_id: null,
+    tool_name: null,
+    hidden: false,
+    created_at: new Date().toISOString(),
+    ...input,
+  };
 }
 
 /**
@@ -102,6 +160,8 @@ export async function listVariants(
 
 export async function deleteMessage(id: string): Promise<void> {
   const db = await getDb();
+  // Hidden tool rows are owned by their turn, so they go with it.
+  await db.execute("DELETE FROM messages WHERE turn_id = ?", [id]);
   await db.execute("DELETE FROM messages WHERE id = ?", [id]);
 }
 
@@ -148,6 +208,7 @@ export async function searchMessages(
        FROM messages m
        JOIN conversations c ON c.id = m.conversation_id
        WHERE m.conversation_id = ?
+         AND m.hidden = 0
          AND m.content LIKE ? ESCAPE '\\'
        ORDER BY m.created_at DESC
        LIMIT ?`,
@@ -159,7 +220,8 @@ export async function searchMessages(
             m.role, m.content, m.created_at
      FROM messages m
      JOIN conversations c ON c.id = m.conversation_id
-     WHERE m.content LIKE ? ESCAPE '\\'
+     WHERE m.hidden = 0
+       AND m.content LIKE ? ESCAPE '\\'
      ORDER BY m.created_at DESC
      LIMIT ?`,
     [pattern, limit],

@@ -80,6 +80,41 @@ export function AgentRail() {
       >
         🧠
       </RailIcon>
+      <RailIcon
+        active={view.kind === "mcp"}
+        onClick={() => setView({ kind: "mcp" })}
+        label="MCP"
+      >
+        🔌
+      </RailIcon>
+      <RailIcon
+        active={view.kind === "knowledge"}
+        onClick={() => setView({ kind: "knowledge" })}
+        label="知识库"
+      >
+        📚
+      </RailIcon>
+      <RailIcon
+        active={view.kind === "compare"}
+        onClick={() => setView({ kind: "compare" })}
+        label="多模型同问"
+      >
+        ⚖️
+      </RailIcon>
+      <RailIcon
+        active={view.kind === "translate"}
+        onClick={() => setView({ kind: "translate" })}
+        label="AI 翻译"
+      >
+        🌐
+      </RailIcon>
+      <RailIcon
+        active={view.kind === "backup"}
+        onClick={() => setView({ kind: "backup" })}
+        label="备份与恢复"
+      >
+        ☁️
+      </RailIcon>
       <div className="flex-1" />
       <RailIcon
         active={false}

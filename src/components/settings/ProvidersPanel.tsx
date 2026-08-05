@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { confirmModal } from "@/stores/dialog";
 import { useData } from "@/stores/data";
 import type { Provider } from "@/types/domain";
 import {
@@ -126,7 +127,7 @@ export function ProvidersPanel() {
   }
 
   async function remove(p: Provider) {
-    if (!confirm(`删除 provider "${p.name}"？`)) return;
+    if (!(await confirmModal({ title: `删除 provider "${p.name}"？`, danger: true }))) return;
     await deleteProvider(p.id);
     await reload();
   }

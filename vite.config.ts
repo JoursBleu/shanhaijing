@@ -6,8 +6,20 @@ import path from "node:path";
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
+// Strip `crossorigin` from the injected <script>/<link> tags. Under Tauri's
+// custom asset protocol (http://tauri.localhost) some WebView2 builds refuse to
+// execute/apply crossorigin-tagged assets, leaving a blank white window.
+function stripCrossorigin() {
+  return {
+    name: "strip-crossorigin",
+    transformIndexHtml(html: string) {
+      return html.replace(/\s+crossorigin\b/g, "");
+    },
+  };
+}
+
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), stripCrossorigin()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

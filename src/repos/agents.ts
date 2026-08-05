@@ -1,9 +1,16 @@
 import { getDb } from "@/db";
 import { newId } from "@/lib/id";
-import type { Agent } from "@/types/domain";
+import type { Agent, McpMode, ToolMode } from "@/types/domain";
 
 function rowToAgent(r: any): Agent {
-  return { ...r, memory_enabled: !!r.memory_enabled } as Agent;
+  return {
+    ...r,
+    memory_enabled: !!r.memory_enabled,
+    tool_mode: (r.tool_mode ?? "auto") as ToolMode,
+    mcp_mode: (r.mcp_mode ?? "auto") as McpMode,
+    max_tool_calls: r.max_tool_calls ?? 6,
+    enabled_tools_json: r.enabled_tools_json ?? null,
+  } as Agent;
 }
 
 export async function listAgents(): Promise<Agent[]> {
@@ -35,6 +42,10 @@ export interface AgentInput {
   greeting?: string | null;
   memory_enabled?: boolean;
   folder_id?: string | null;
+  tool_mode?: ToolMode;
+  mcp_mode?: McpMode;
+  max_tool_calls?: number;
+  enabled_tools_json?: string | null;
 }
 
 export async function createAgent(input: AgentInput): Promise<string> {
@@ -44,8 +55,9 @@ export async function createAgent(input: AgentInput): Promise<string> {
     `INSERT INTO agents
      (id, name, avatar_path, signature, default_provider_id, default_model,
       default_temperature, default_max_tokens, default_top_p, card_id,
-      persona_text, greeting, memory_enabled, folder_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      persona_text, greeting, memory_enabled, folder_id,
+      tool_mode, mcp_mode, max_tool_calls, enabled_tools_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       input.name,
@@ -61,6 +73,10 @@ export async function createAgent(input: AgentInput): Promise<string> {
       input.greeting ?? null,
       input.memory_enabled ? 1 : 0,
       input.folder_id ?? null,
+      input.tool_mode ?? "auto",
+      input.mcp_mode ?? "auto",
+      input.max_tool_calls ?? 6,
+      input.enabled_tools_json ?? null,
     ],
   );
   return id;
@@ -87,5 +103,33 @@ export async function updateAgent(
 
 export async function deleteAgent(id: string): Promise<void> {
   const db = await getDb();
+  await db.execute("DELETE FROM agent_knowledge_bases WHERE agent_id = ?", [id]);
   await db.execute("DELETE FROM agents WHERE id = ?", [id]);
+}
+
+// ---- Knowledge base bindings ----
+
+export async function listAgentKbIds(agentId: string): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.select<{ kb_id: string }[]>(
+    "SELECT kb_id FROM agent_knowledge_bases WHERE agent_id = ? ORDER BY position",
+    [agentId],
+  );
+  return rows.map((r) => r.kb_id);
+}
+
+export async function setAgentKbIds(
+  agentId: string,
+  kbIds: string[],
+): Promise<void> {
+  const db = await getDb();
+  await db.execute("DELETE FROM agent_knowledge_bases WHERE agent_id = ?", [
+    agentId,
+  ]);
+  for (let i = 0; i < kbIds.length; i++) {
+    await db.execute(
+      "INSERT INTO agent_knowledge_bases (agent_id, kb_id, position) VALUES (?, ?, ?)",
+      [agentId, kbIds[i], i],
+    );
+  }
 }

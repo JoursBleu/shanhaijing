@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { confirmModal } from "@/stores/dialog";
 import { useData } from "@/stores/data";
 import { useUI } from "@/stores/ui";
 import {
@@ -45,7 +46,7 @@ export function PersonasPanel() {
     setEditingId(null);
   }
   async function remove(id: string) {
-    if (!confirm("删除这个身份？")) return;
+    if (!(await confirmModal({ title: "删除这个身份？", danger: true }))) return;
     await deletePersona(id);
     if (activeId === id) setActive(null);
     await reload();

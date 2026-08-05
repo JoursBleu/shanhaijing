@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { confirmModal, promptModal } from "@/stores/dialog";
 import { useData } from "@/stores/data";
 import { useUI } from "@/stores/ui";
 import { Button } from "@/components/ui/Button";
@@ -100,7 +101,7 @@ export function ConversationList() {
   }
 
   async function remove(id: string) {
-    if (!confirm("删除这段对话？")) return;
+    if (!(await confirmModal({ title: "删除这段对话？", danger: true }))) return;
     await deleteConversation(id);
     await reloadConversations();
     if (view.kind === "conversation" && view.id === id) {
@@ -115,21 +116,21 @@ export function ConversationList() {
   }
 
   async function addFolder() {
-    const name = prompt("文件夹名字");
+    const name = await promptModal({ title: "文件夹名字" });
     if (!name) return;
     await createFolder("conversation", name.trim());
     await reloadFolders();
   }
 
   async function renameF(id: string, curr: string) {
-    const name = prompt("重命名文件夹", curr);
+    const name = await promptModal({ title: "重命名文件夹", defaultValue: curr });
     if (!name || name === curr) return;
     await renameFolder(id, name.trim());
     await reloadFolders();
   }
 
   async function deleteF(id: string) {
-    if (!confirm("删除该文件夹？里面的对话会回到根目录。")) return;
+    if (!(await confirmModal({ title: "删除该文件夹？", body: "里面的对话会回到根目录。", danger: true }))) return;
     await deleteFolder(id);
     await Promise.all([reloadFolders(), reloadConversations()]);
   }
