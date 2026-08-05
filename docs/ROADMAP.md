@@ -1,79 +1,88 @@
 # Roadmap
 
-## v0.1 — Skeleton (now)
+## Where this is going
 
-- [x] Tauri 2 + React 19 + TS + Tailwind v4
-- [x] Three-pane shell (rail / list / chat)
-- [x] SQLite schema (migration 0001)
-- [x] PolyForm NC license
-- [ ] CI: typecheck + cargo check
+Toward an **agent host** in the Hermes / OpenClaw sense: a resident core that
+several surfaces talk to. The ordering rule is *reach parity with what already
+works before adding anything new* — which is why the pivot was a subtractive
+refactor rather than a rewrite.
 
-## v0.2 — Talk to one agent
+## Shipped
 
-- [ ] Provider CRUD UI + encrypted key storage
-- [ ] Model list fetch + cache
-- [ ] User Persona CRUD (single persona OK)
-- [ ] Agent CRUD (bare LLM, no card/skill yet)
-- [ ] Private (1v1) conversation: send → stream → render
-- [ ] Markdown + code highlighting
+### v1.0 → v1.0.1 (2026-05-31)
 
-## v0.3 — Characters & skills
+Multi-provider chat, agents, skills, memory (lexical retrieval), variant
+branches, folders, full-text search, export, i18n, themes, first-run seeds.
+Windows MSI + NSIS.
 
-- [ ] SillyTavern V2 PNG import
-- [ ] Skill CRUD (markdown + frontmatter)
-- [ ] Attach card / skills to agent
-- [ ] Greeting playback on new conversation
-- [ ] Prompt debug panel
+### v1.1 (2026-08-05) — agent layer
 
-## v0.4 — Groups
+- Agent loop: multi-round tool calling with approval, degrading to a plain
+  stream when the provider rejects `tools`
+- 9 built-in tools; MCP client over Streamable HTTP
+- Per-agent capability surface: `tool_mode` / `mcp_mode` / `max_tool_calls` /
+  tool whitelist / knowledge-base bindings
+- Knowledge base RAG: hybrid retrieval (vector ⊕ lexical, RRF) + optional
+  cross-encoder rerank; per-KB chunking and search settings
+- Document parsing: PDF, DOCX, XLSX, PPTX, EPUB, HTML, CSV/TSV
+- Structured tool history — the model can see what it already looked up after a
+  reload
+- Embedding-based memory retrieval with lexical fallback
+- Workspaces: multi-model compare, translation, WebDAV backup
+- Linux deb/rpm/AppImage + Windows msi/nsis
 
-- [ ] Casual group: pick agents, capped turns
-- [ ] Work group: task_goal, cost/turn limits, `<done/>` / `<waiting/>`
-- [ ] `@`-mention turn queueing
-- [ ] `<silent/>` opt-out
+### Main-line pivot (2026-08-05)
 
-## v0.5 — History power tools
+Group chat, character cards and user personas removed from `main`; the full
+implementation lives on `v1-multi-agent` (tag `v1.1.0`). The agent core was
+decoupled from the UI via `TurnHost` injection.
 
-- [x] Edit / regenerate / branches (swipes)
-- [x] Folders for agents & conversations
-- [x] Full-text search over messages
+## Next
 
-## v0.6 — Memory
+### Decide where the core runs
 
-- [x] Manual + auto memory entries (fact / summary / preference)
-- [x] One-click "sediment to memory" per conversation (LLM-driven JSON extraction)
-- [x] Naive lexical retrieval (top-K) injected into system prompt
-- [ ] Embedding-based retrieval (deferred to v1.1)
+Rust vs Node/Bun. Blocks everything below it, because it determines whether the
+existing ~2.2K lines of capability code move or get rewritten, and it changes
+the installer by roughly 10×. See ARCHITECTURE.md § The open decision.
 
-## v0.7 — Polish
+### Execution
 
-- [x] Bilingual i18n (zh + en)
-- [x] Themes (dark default + light)
-- [x] Export Markdown / JSON
-- [x] Prompt debug panel
-- [ ] Auto-update channel (deferred to post-1.0)
+The highest-value missing capability, and the one that separates this from a
+chat client. The plumbing is small — the agent loop, tool registry, approval
+flow and per-agent gating already exist; it needs a `run_command` tool and a
+Tauri shell permission.
 
-## v1.0 — First public release
+The work is the sandbox, not the plumbing. Hermes ships six terminal backends
+(local / docker / ssh / modal / daytona / singularity) and OpenHands isolates
+in Docker for the same reason: an LLM driving a shell, steered by text it
+retrieved, is an arbitrary-code-execution path. First version should target an
+isolated backend (WSL / container / remote host), not the user's own shell.
 
-- [x] Bug bash (typecheck + vite build clean across all features)
-- [x] Release notes ([v1.0-release-notes.md](v1.0-release-notes.md))
-- [x] Windows installers (MSI + NSIS), built on the Windows dev box
-- [ ] macOS / Linux installers (build on those hosts when needed)
-- [ ] Landing page (web download, no app stores)
+### Extract the resident core
 
-## v1.0.1 — Onboarding seeds & provider UX (2026-05-31)
+Move the core out of the webview, put a protocol in front of it, make the
+desktop app one surface. Then cron, non-desktop surfaces and remote operation
+become possible.
 
-- [x] First-run seeds: 11 skills (sourced from awesome-chatgpt-prompts /
-      anthropics/skills / SillyTavern) + 3 cards + 7 agents + 5 sample
-      conversations. See [v1.0.1-onboarding.md](v1.0.1-onboarding.md).
-- [x] Providers panel: modal-based add/edit, empty-state hint, `anthropic`
-      kind in the dropdown, auto-reload on mount.
-- [x] Agents panel: bulk-apply default provider/model to unconfigured
-      agents (one click instead of opening N forms).
-- [x] Drop "agent as friend" marketing copy from release notes & system prompt.
+Porting checklist in ARCHITECTURE.md § Known porting work.
 
-## v2+ (later)
+## Backlog
 
-- v2: server mode + multi-user workspace + MCP + RAG
-- v3: cross-user social (A's agent visiting B's group)
-- v4: skill marketplace
+| item | note |
+|---|---|
+| stdio MCP | needs a Tauri sidecar; only Streamable HTTP works today, and much of the MCP ecosystem is stdio |
+| API keys → OS keyring | currently AES-GCM with the key in `localStorage`; also blocks the core extraction |
+| vector index | `embedding_json` + in-process cosine breaks down past small bases |
+| trigger-based skill loading | SKILL.md frontmatter; today every attached skill is injected in full |
+| auto-update channel | tauri-updater |
+| auto-extract memory at session end | still a manual button |
+| MCP marketplace | server URLs are typed by hand |
+| expose an OpenAI-compatible endpoint | would let other clients use this as a provider |
+| code splitting | main bundle ~984 KB |
+
+## Not planned
+
+- Multi-agent group chat — lives on `v1-multi-agent`, not coming back to main
+- Character cards / roleplay — same
+- Cross-user social, skill marketplace — the v3/v4 ideas from the old roadmap,
+  dropped with the pivot
