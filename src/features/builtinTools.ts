@@ -9,6 +9,8 @@
  *   web_fetch                     — read a URL (HTTP GET), HTML stripped.
  */
 
+import { runCommand } from "@/features/exec";
+import { loadExecBackend } from "@/features/execConfig";
 import { registerTool } from "@/llm/tools";
 import {
   retrieveMemories as retrieveMemoriesForAgent,
@@ -413,5 +415,63 @@ registerTool({
     if (d?.url) return `![${cap}](${d.url})`;
     if (d?.b64_json) return `![${cap}](data:image/png;base64,${d.b64_json})`;
     return "Image generated but response had no url/b64_json.";
+  },
+});
+
+// ---- Command execution ----
+
+/**
+ * Disabled until a backend is configured. There is no sensible default: the
+ * safe choice depends on what the machine has (WSL / docker / a remote host),
+ * and defaulting to the user's own shell would make every knowledge-base
+ * document a potential RCE.
+ */
+registerTool({
+  name: "run_command",
+  description:
+    "Run a shell command in the configured execution environment and return " +
+    "its stdout/stderr and exit code. Only available once the user has " +
+    "configured an execution backend. Prefer one self-contained command; " +
+    "state what you are about to run and why before calling.",
+  parameters: {
+    type: "object",
+    properties: {
+      command: { type: "string", description: "The shell command to run." },
+      cwd: {
+        type: "string",
+        description: "Optional working directory inside the backend.",
+      },
+    },
+    required: ["command"],
+    additionalProperties: false,
+  },
+  execute: async (args, ctx) => {
+    const command = String(args?.command ?? "").trim();
+    if (!command) return "Error: empty command.";
+
+    const backend = await loadExecBackend();
+    if (!backend) {
+      return (
+        "Error: no execution backend configured. The user must pick one in " +
+        "Settings → Execution (WSL / Docker / SSH / local) before commands can run."
+      );
+    }
+
+    let r;
+    try {
+      r = await runCommand(
+        { ...backend, cwd: args?.cwd ? String(args.cwd) : backend.cwd },
+        command,
+        ctx.signal,
+      );
+    } catch (e: any) {
+      return `Error running command: ${e?.message ?? e}`;
+    }
+
+    const parts = [`[${backend.kind}] exit=${r.timedOut ? "timeout" : r.code}`];
+    if (r.stdout.trim()) parts.push(`stdout:\n${r.stdout.trim()}`);
+    if (r.stderr.trim()) parts.push(`stderr:\n${r.stderr.trim()}`);
+    if (!r.stdout.trim() && !r.stderr.trim()) parts.push("(no output)");
+    return parts.join("\n\n");
   },
 });

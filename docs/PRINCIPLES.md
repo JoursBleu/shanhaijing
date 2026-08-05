@@ -1,13 +1,12 @@
 # Principles
 
-These principles override convenience, performance, and feature requests.
-When in doubt, re-read this file.
-
-> **2026-08-05 rewrite.** The previous principles 1 and 2 ("agents talk in the
-> open", "you're always in the room") were statements about multi-agent group
-> chat. Group chat was moved off the main line to the `v1-multi-agent` branch,
-> so those two no longer describe this product. The old text is preserved on
-> that branch.
+> **2026-08-05 status: deferred.** Feature parity with OpenClaw / Hermes comes
+> first. These are recorded so the eventual trade-offs are deliberate rather
+> than accidental — they are *not* currently gating work. Principle 3 in
+> particular is expected to be broken on purpose (a resident core outliving the
+> window is the whole point of the parity target).
+>
+> Revisit once the parity checklist in ROADMAP.md is largely closed.
 
 ## 1. The user sees what the agent did
 
@@ -43,15 +42,15 @@ retrieved document is a realistic path to arbitrary code execution, and the
 blast radius has to be bounded by construction rather than by the model's good
 behaviour.
 
-## 3. A turn is started by a human
+## 3. A turn is started by a human ~~(deferred)~~
 
-The agent acts inside a turn the user initiated. There is no cron, no
+Historically: the agent acts inside a turn the user initiated — no cron, no
 background task, no wake-on-event.
 
-This is the principle most likely to change: an agent host in the
-Hermes/OpenClaw sense is defined by outliving the window. When it does change,
-it changes deliberately, with the audit trail from principle 1 intact — not as
-a side effect of adding a scheduler.
+**Explicitly dropped as a constraint.** cron, channels and a resident core are
+parity requirements, and all three break this. What should survive the break is
+principle 1: whatever the agent does unattended still has to be reconstructable
+from the record afterwards.
 
 ## 4. Local first
 

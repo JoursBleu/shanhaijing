@@ -26,6 +26,7 @@ import { SkillsPanel } from "@/components/settings/SkillsPanel";
 import { MemoriesPanel } from "@/components/settings/MemoriesPanel";
 import { McpPanel } from "@/components/settings/McpPanel";
 import { KnowledgePanel } from "@/components/settings/KnowledgePanel";
+import { ExecPanel } from "@/components/settings/ExecPanel";
 import { ComparePanel } from "@/components/settings/ComparePanel";
 import { TranslatePanel } from "@/components/settings/TranslatePanel";
 import { BackupPanel } from "@/components/settings/BackupPanel";
@@ -420,6 +421,16 @@ export function ChatPane() {
           </header>
           <PanelView>
             <KnowledgePanel />
+          </PanelView>
+        </>
+      )}
+      {view.kind === "exec" && (
+        <>
+          <header className="h-12 px-4 flex items-center border-b border-[var(--color-border)] font-semibold">
+            执行环境
+          </header>
+          <PanelView>
+            <ExecPanel />
           </PanelView>
         </>
       )}

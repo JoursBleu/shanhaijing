@@ -1,88 +1,90 @@
 # Roadmap
 
-## Where this is going
+## The goal
 
-Toward an **agent host** in the Hermes / OpenClaw sense: a resident core that
-several surfaces talk to. The ordering rule is *reach parity with what already
-works before adding anything new* — which is why the pivot was a subtractive
-refactor rather than a rewrite.
+Reach feature parity with the agent apps we benchmarked — OpenClaw, Hermes,
+Cherry Studio, OpenHands, Cline — then differentiate. Principles are deferred
+until this checklist is largely closed (see PRINCIPLES.md).
 
-## Shipped
+## Settled: the core stays TypeScript
 
-### v1.0 → v1.0.1 (2026-05-31)
+Parity itself decides this. Rewriting the existing ~2.2K lines of capability
+code in Rust would *lose* features on day one — pdfjs, mammoth, xlsx and the
+MCP SDK have no equivalent Rust implementations, and OpenClaw is TS/Node
+anyway. Installer size is not a feature.
 
-Multi-provider chat, agents, skills, memory (lexical retrieval), variant
-branches, folders, full-text search, export, i18n, themes, first-run seeds.
-Windows MSI + NSIS.
+So: the core moves from the webview into a Node/Bun process as-is. The
+installer goes from ~6 MB to ~60–90 MB, which is normal here (Cherry's AppImage
+is 82 MB; ours is small only because there is no backend).
 
-### v1.1 (2026-08-05) — agent layer
+## Parity checklist
 
-- Agent loop: multi-round tool calling with approval, degrading to a plain
-  stream when the provider rejects `tools`
-- 9 built-in tools; MCP client over Streamable HTTP
-- Per-agent capability surface: `tool_mode` / `mcp_mode` / `max_tool_calls` /
-  tool whitelist / knowledge-base bindings
-- Knowledge base RAG: hybrid retrieval (vector ⊕ lexical, RRF) + optional
-  cross-encoder rerank; per-KB chunking and search settings
-- Document parsing: PDF, DOCX, XLSX, PPTX, EPUB, HTML, CSV/TSV
-- Structured tool history — the model can see what it already looked up after a
-  reload
-- Embedding-based memory retrieval with lexical fallback
-- Workspaces: multi-model compare, translation, WebDAV backup
-- Linux deb/rpm/AppImage + Windows msi/nsis
+### Have
 
-### Main-line pivot (2026-08-05)
+Agent loop with multi-round tool calling · tool approval · per-agent capability
+surface · MCP over Streamable HTTP · knowledge base RAG (hybrid + rerank) ·
+document parsing (PDF/DOCX/XLSX/PPTX/EPUB/HTML/CSV) · embedding memory ·
+multi-provider · variant branches · folders · export · multi-model compare ·
+translation · WebDAV backup
 
-Group chat, character cards and user personas removed from `main`; the full
-implementation lives on `v1-multi-agent` (tag `v1.1.0`). The agent core was
-decoupled from the UI via `TurnHost` injection.
+### Missing — no daemon required
 
-## Next
+| capability | who has it | note |
+|---|---|---|
+| **execution / terminal backends** | Hermes (6: local/docker/ssh/modal/daytona/singularity), OpenClaw (elevated bash), OpenHands (Docker), Cline | biggest single gap; plumbing is small, the sandbox is the work |
+| **file read/write tools** | all | |
+| **browser tools** | Hermes (5 backends) | |
+| **sub-agent delegation** | Hermes (`delegate_tool`, parallel) | |
+| **stdio MCP** | all | needs a Tauri sidecar; most of the ecosystem is stdio |
+| **slash command system** | OpenClaw (`/config /mcp /plugins /bash`) | |
+| **plan/act mode** | Cline | |
+| **trigger-based skill loading** | Hermes, OpenHands (microagent) | today every attached skill is injected in full |
+| **self-improving skills / auto-curated memory** | Hermes (`/learn` loop) | memory = facts, skill = procedure |
+| **FTS5 cross-session recall** | Hermes | we have LIKE search only |
+| **credential pool rotation** | Hermes | |
+| **vision / image input** | Hermes, Cherry | |
+| **MCP marketplace** | Cherry | server URLs are typed by hand today |
+| **expose an OpenAI-compatible endpoint** | Cherry v2, OpenClaw, Hermes | lets other clients use us as a provider |
+| **voice mode** | Hermes, OpenClaw | |
 
-### Decide where the core runs
+### Missing — requires the resident core
 
-Rust vs Node/Bun. Blocks everything below it, because it determines whether the
-existing ~2.2K lines of capability code move or get rewritten, and it changes
-the installer by roughly 10×. See ARCHITECTURE.md § The open decision.
-
-### Execution
-
-The highest-value missing capability, and the one that separates this from a
-chat client. The plumbing is small — the agent loop, tool registry, approval
-flow and per-agent gating already exist; it needs a `run_command` tool and a
-Tauri shell permission.
-
-The work is the sandbox, not the plumbing. Hermes ships six terminal backends
-(local / docker / ssh / modal / daytona / singularity) and OpenHands isolates
-in Docker for the same reason: an LLM driving a shell, steered by text it
-retrieved, is an arbitrary-code-execution path. First version should target an
-isolated backend (WSL / container / remote host), not the user's own shell.
-
-### Extract the resident core
-
-Move the core out of the webview, put a protocol in front of it, make the
-desktop app one surface. Then cron, non-desktop surfaces and remote operation
-become possible.
-
-Porting checklist in ARCHITECTURE.md § Known porting work.
-
-## Backlog
-
-| item | note |
+| capability | who has it |
 |---|---|
-| stdio MCP | needs a Tauri sidecar; only Streamable HTTP works today, and much of the MCP ecosystem is stdio |
-| API keys → OS keyring | currently AES-GCM with the key in `localStorage`; also blocks the core extraction |
-| vector index | `embedding_json` + in-process cosine breaks down past small bases |
-| trigger-based skill loading | SKILL.md frontmatter; today every attached skill is injected in full |
-| auto-update channel | tauri-updater |
-| auto-extract memory at session end | still a manual button |
-| MCP marketplace | server URLs are typed by hand |
-| expose an OpenAI-compatible endpoint | would let other clients use this as a provider |
-| code splitting | main bundle ~984 KB |
+| **resident core + protocol** | OpenClaw (`gateway-protocol` JSON-RPC), Hermes (`AIAgent` shared by every surface) |
+| **cron / scheduling** | Hermes (60s tick, natural-language schedules), OpenClaw |
+| **channel adapters** | OpenClaw (25+ platforms), Hermes (20+) |
+| **ACP (VS Code / Zed / JetBrains)** | Hermes |
+| **CLI surface** | both |
+| **profiles / multi-instance isolation** | Hermes |
+| **hooks** | Hermes |
+| **health doctor / setup wizard** | OpenClaw |
+| **plugin system** | OpenClaw (Plugin SDK), Hermes (3 sources) |
+
+## Order of work
+
+1. **Execution** — the most conspicuous gap, and independent of everything
+   else. Ships as a tool with a pluggable backend so the sandbox choice stays
+   data rather than a rewrite. Even with principles deferred, the first backend
+   should not be the user's own shell: retrieved text steering a shell is an
+   RCE path, which is a correctness problem rather than a philosophical one.
+2. **The rest of the no-daemon column** — files, browser, sub-agents, stdio
+   MCP, slash commands, trigger-based skills, FTS5.
+3. **Extract the resident core** — out of the webview, protocol in front,
+   desktop app becomes one surface. The whole daemon column unlocks together.
+4. **Channels, cron, ACP, CLI** — all downstream of 3.
 
 ## Not planned
 
-- Multi-agent group chat — lives on `v1-multi-agent`, not coming back to main
-- Character cards / roleplay — same
-- Cross-user social, skill marketplace — the v3/v4 ideas from the old roadmap,
-  dropped with the pivot
+Multi-agent group chat and character cards live on `v1-multi-agent` and are not
+coming back to main. Cross-user social and the skill marketplace (the old v3/v4
+items) were dropped with the pivot.
+
+## Shipped
+
+- **v1.0 → v1.0.1** (2026-05-31) — multi-provider chat, agents, skills, memory,
+  variant branches, folders, search, export, i18n, themes, first-run seeds
+- **v1.1** (2026-08-05) — the agent layer: tool calling, MCP, knowledge base
+  RAG, document parsing, structured tool history, three workspaces
+- **main pivot** (2026-08-05) — group chat / cards / personas out; core
+  decoupled from the UI via `TurnHost`

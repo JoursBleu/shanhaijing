@@ -81,6 +81,13 @@ export function AgentRail() {
         📚
       </RailIcon>
       <RailIcon
+        active={view.kind === "exec"}
+        onClick={() => setView({ kind: "exec" })}
+        label="执行环境"
+      >
+        ⌨️
+      </RailIcon>
+      <RailIcon
         active={view.kind === "compare"}
         onClick={() => setView({ kind: "compare" })}
         label="多模型同问"

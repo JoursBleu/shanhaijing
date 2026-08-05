@@ -9,6 +9,7 @@
 
 import { listTools, type ToolSpec } from "@/llm/tools";
 import { listAgentKbIds } from "@/repos/agents";
+import { loadExecBackend } from "@/features/execConfig";
 import type { Agent } from "@/types/domain";
 
 export interface AgentToolConfig {
@@ -47,11 +48,12 @@ export async function resolveAgentTools(
     return true;
   });
 
-  // An agent with no knowledge bases bound has nothing to search.
-  const usable =
-    knowledgeBaseIds.length > 0
-      ? tools
-      : tools.filter((t) => t.name !== "search_knowledge");
+  // A tool whose prerequisite is missing is hidden rather than left to fail:
+  // advertising it only buys a wasted round and a confusing error.
+  const unavailable = new Set<string>();
+  if (knowledgeBaseIds.length === 0) unavailable.add("search_knowledge");
+  if (!(await loadExecBackend())) unavailable.add("run_command");
+  const usable = tools.filter((t) => !unavailable.has(t.name));
 
   return {
     tools: usable,

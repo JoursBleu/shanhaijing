@@ -10,6 +10,7 @@ type ViewKind =
   | { kind: "memories" }
   | { kind: "mcp" }
   | { kind: "knowledge" }
+  | { kind: "exec" }
   | { kind: "compare" }
   | { kind: "translate" }
   | { kind: "backup" };
