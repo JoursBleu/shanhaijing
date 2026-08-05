@@ -3,9 +3,8 @@
  * browser-side Blob. Pure client; no Tauri command needed.
  */
 
-import { getConversation, listConversationAgents } from "@/repos/conversations";
+import { getConversation } from "@/repos/conversations";
 import { getAgent } from "@/repos/agents";
-import { getPersona } from "@/repos/personas";
 import { listMessages } from "@/repos/messages";
 import { pickActiveVariants } from "@/lib/variants";
 
@@ -33,13 +32,7 @@ export async function exportConversationAsMarkdown(
 ): Promise<void> {
   const conv = await getConversation(conversationId);
   if (!conv) throw new Error("Conversation not found");
-  const persona = await getPersona(conv.user_persona_id);
-  const convAgents = await listConversationAgents(conversationId);
-  const agentById = new Map<string, string>();
-  for (const ca of convAgents) {
-    const a = await getAgent(ca.agent_id);
-    if (a) agentById.set(a.id, a.name);
-  }
+  const agent = conv.agent_id ? await getAgent(conv.agent_id) : null;
   const all = await listMessages(conversationId);
   const visible = pickActiveVariants(all, opts.activeVariants ?? {});
 
@@ -47,19 +40,13 @@ export async function exportConversationAsMarkdown(
   lines.push(`# ${conv.title || "(未命名)"}`);
   lines.push("");
   lines.push(
-    `> kind: ${conv.kind} · persona: ${persona?.name ?? "?"} · ${new Date(conv.created_at + "Z").toLocaleString()}`,
+    `> agent: ${agent?.name ?? "?"} · ${new Date(conv.created_at + "Z").toLocaleString()}`,
   );
-  if (conv.kind === "work" && conv.task_goal) {
-    lines.push(`> goal: ${conv.task_goal}`);
-  }
   lines.push("");
 
   for (const m of visible) {
     if (m.role === "system") continue;
-    const who =
-      m.role === "user"
-        ? persona?.name ?? "user"
-        : agentById.get(m.sender_id ?? "") ?? "agent";
+    const who = m.role === "user" ? "user" : agent?.name ?? "agent";
     lines.push(`### ${who} · ${m.role}`);
     lines.push("");
     lines.push(m.content);
@@ -78,20 +65,13 @@ export async function exportConversationAsJson(
 ): Promise<void> {
   const conv = await getConversation(conversationId);
   if (!conv) throw new Error("Conversation not found");
-  const persona = await getPersona(conv.user_persona_id);
-  const convAgents = await listConversationAgents(conversationId);
-  const agents = [];
-  for (const ca of convAgents) {
-    const a = await getAgent(ca.agent_id);
-    if (a) agents.push(a);
-  }
+  const agent = conv.agent_id ? await getAgent(conv.agent_id) : null;
   const messages = await listMessages(conversationId);
   const payload = {
-    schema: "shanhaijing.conversation.v1",
+    schema: "shanhaijing.conversation.v2",
     exported_at: new Date().toISOString(),
     conversation: conv,
-    persona,
-    agents,
+    agent,
     messages,
   };
   download(

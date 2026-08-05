@@ -24,14 +24,6 @@ export interface Model {
   cached_at: string;
 }
 
-export interface UserPersona {
-  id: ID;
-  name: string;
-  avatar_path: string | null;
-  bio: string;
-  created_at: string;
-}
-
 /** Whether an agent may call built-in tools. */
 export type ToolMode = "disabled" | "auto";
 /** `manual` exposes only the MCP tools named in `enabled_tools_json`. */
@@ -41,13 +33,11 @@ export interface Agent {
   id: ID;
   name: string;
   avatar_path: string | null;
-  signature: string;
   default_provider_id: ID | null;
   default_model: string | null;
   default_temperature: number;
   default_max_tokens: number | null;
   default_top_p: number;
-  card_id: ID | null;
   persona_text: string | null;
   greeting: string | null;
   memory_enabled: boolean;
@@ -57,14 +47,6 @@ export interface Agent {
   max_tool_calls: number;
   /** JSON string[] whitelist of tool names; null = every tool of an enabled kind. */
   enabled_tools_json: string | null;
-  created_at: string;
-}
-
-export interface CharacterCard {
-  id: ID;
-  name: string;
-  raw_file_path: string;
-  parsed_json: string;
   created_at: string;
 }
 
@@ -94,37 +76,24 @@ export interface Folder {
   position: number;
 }
 
-export type ConversationKind = "private" | "casual" | "work";
-export type TaskStatus = "open" | "done" | "abandoned";
-
 export interface Conversation {
   id: ID;
-  kind: ConversationKind;
   title: string;
-  user_persona_id: ID;
+  /** Null once the agent is deleted; the transcript outlives it. */
+  agent_id: ID | null;
   folder_id: ID | null;
 
-  task_goal: string | null;
-  task_status: TaskStatus | null;
-  task_summary: string | null;
-  cost_limit_cents: number | null;
-  cost_used_cents: number;
-  initial_responder: ID | null;
-  max_total_turns: number | null;
-  max_per_agent_turns: number | null;
-
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ConversationAgent {
-  conversation_id: ID;
-  agent_id: ID;
+  /** Per-conversation overrides of the agent's defaults. */
   provider_id: ID | null;
   model: string | null;
   temperature: number | null;
   max_tokens: number | null;
   top_p: number | null;
+
+  cost_used_cents: number;
+
+  created_at: string;
+  updated_at: string;
 }
 
 export type MessageRole = "user" | "assistant" | "system" | "tool";
@@ -139,7 +108,6 @@ export interface Message {
   variant_group_id: ID | null;
   variant_index: number;
   content: string;
-  mentioned_agent_ids: string;
   turn_id: ID | null;
   in_reply_to_message_id: ID | null;
   tokens_in: number | null;

@@ -8,7 +8,6 @@ export interface InsertMessageInput {
   sender_id: string | null;
   content: string;
   parent_id?: string | null;
-  mentioned_agent_ids?: string[];
   in_reply_to_message_id?: string | null;
   variant_group_id?: string | null;
   variant_index?: number;
@@ -34,10 +33,10 @@ export async function insertMessage(
   await db.execute(
     `INSERT INTO messages
      (id, conversation_id, role, sender_id, parent_id, content,
-      mentioned_agent_ids, in_reply_to_message_id,
+      in_reply_to_message_id,
       variant_group_id, variant_index, turn_id,
       tool_calls_json, tool_call_id, tool_name, hidden)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       input.conversation_id,
@@ -45,7 +44,6 @@ export async function insertMessage(
       input.sender_id,
       input.parent_id ?? null,
       input.content,
-      JSON.stringify(input.mentioned_agent_ids ?? []),
       input.in_reply_to_message_id ?? null,
       groupId,
       input.variant_index ?? 0,
@@ -130,7 +128,6 @@ export function localMessage(
     active_branch_id: null,
     variant_group_id: null,
     variant_index: 0,
-    mentioned_agent_ids: "[]",
     turn_id: null,
     in_reply_to_message_id: null,
     tokens_in: null,

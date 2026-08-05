@@ -5,13 +5,9 @@ import { ChatPane } from "@/components/layout/ChatPane";
 import { DialogHost } from "@/components/DialogHost";
 import { bootstrap } from "@/features/bootstrap";
 import { useData } from "@/stores/data";
-import { useUI } from "@/stores/ui";
 
 export default function App() {
   const reloadAll = useData((s) => s.reloadAll);
-  const personas = useData((s) => s.personas);
-  const activePersonaId = useUI((s) => s.activePersonaId);
-  const setActivePersonaId = useUI((s) => s.setActivePersonaId);
   const [ready, setReady] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -26,13 +22,6 @@ export default function App() {
       }
     })();
   }, []);
-
-  // Pick first persona by default
-  useEffect(() => {
-    if (ready && !activePersonaId && personas.length > 0) {
-      setActivePersonaId(personas[0]!.id);
-    }
-  }, [ready, activePersonaId, personas]);
 
   if (err) {
     return (

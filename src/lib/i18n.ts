@@ -28,8 +28,6 @@ const en: Record<string, string> = {
   // rail labels (titles)
   对话: "Chats",
   Agents: "Agents",
-  我的身份: "My Personas",
-  角色卡: "Character Cards",
   技能: "Skills",
   记忆: "Memories",
   "设置 / Providers": "Settings / Providers",

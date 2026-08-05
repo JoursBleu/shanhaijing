@@ -12,9 +12,8 @@
  * participating agent so each agent's memory store reflects what it learned.
  */
 
-import { getConversation, listConversationAgents } from "@/repos/conversations";
+import { getConversation } from "@/repos/conversations";
 import { getAgent } from "@/repos/agents";
-import { getPersona } from "@/repos/personas";
 import { getProvider } from "@/repos/providers";
 import { listMessages } from "@/repos/messages";
 import { createMemoryEmbedded } from "@/features/memoryRetrieval";
@@ -80,46 +79,34 @@ export async function summarizeConversation(
 ): Promise<SummarizeResult[]> {
   const conv = await getConversation(conversationId);
   if (!conv) throw new Error("Conversation not found");
-  const persona = await getPersona(conv.user_persona_id);
-  if (!persona) throw new Error("User persona missing");
-  const convAgents = await listConversationAgents(conversationId);
+  if (!conv.agent_id) return [];
+  const agent = await getAgent(conv.agent_id);
+  if (!agent) return [];
+
   const history = await listMessages(conversationId);
   if (history.length === 0) return [];
 
-  // Build a plain transcript once.
-  const speakerName = new Map<string | null, string>();
-  speakerName.set(persona.id, persona.name);
-  for (const ca of convAgents) {
-    const a = await getAgent(ca.agent_id);
-    if (a) speakerName.set(a.id, a.name);
-  }
   const transcript = history
     .filter((m) => m.role !== "system")
-    .map((m) => {
-      const who = speakerName.get(m.sender_id) ??
-        (m.role === "user" ? persona.name : "Agent");
-      return `${who}: ${m.content}`;
-    })
+    .map((m) => `${m.role === "user" ? "User" : agent.name}: ${m.content}`)
     .join("\n\n");
 
   const results: SummarizeResult[] = [];
 
-  for (const ca of convAgents) {
-    const agent = await getAgent(ca.agent_id);
-    if (!agent) continue;
-    const providerId = ca.provider_id ?? agent.default_provider_id;
-    if (!providerId) continue;
+  {
+    const providerId = conv.provider_id ?? agent.default_provider_id;
+    if (!providerId) return results;
     const provider = await getProvider(providerId);
-    if (!provider) continue;
-    const model = ca.model ?? agent.default_model;
-    if (!model) continue;
+    if (!provider) return results;
+    const model = conv.model ?? agent.default_model;
+    if (!model) return results;
 
     const sys: ChatMessage = {
       role: "system",
       content: SUMMARY_INSTRUCTIONS.split("{agent}")
         .join(agent.name)
         .split("{user}")
-        .join(persona.name),
+        .join("the user"),
     };
     const user: ChatMessage = {
       role: "user",
@@ -146,7 +133,7 @@ export async function summarizeConversation(
         preferenceMemoryIds: [],
         raw: `*[error: ${(e as any)?.message ?? e}]*`,
       });
-      continue;
+      return results;
     }
 
     const parsed = tryParseJson(raw);

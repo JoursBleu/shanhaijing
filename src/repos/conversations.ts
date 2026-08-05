@@ -1,99 +1,76 @@
 import { getDb } from "@/db";
 import { newId } from "@/lib/id";
-import type {
-  Conversation,
-  ConversationAgent,
-  ConversationKind,
-} from "@/types/domain";
-
-function rowToConv(r: any): Conversation {
-  return r as Conversation;
-}
+import type { Conversation } from "@/types/domain";
 
 export interface CreateConversationInput {
-  kind: ConversationKind;
+  agent_id: string;
   title?: string;
-  user_persona_id: string;
-  agent_ids: string[];
-  task_goal?: string | null;
-  cost_limit_cents?: number | null;
-  initial_responder?: string | null;
-  max_total_turns?: number | null;
-  max_per_agent_turns?: number | null;
+  folder_id?: string | null;
+  /** Overrides of the agent's defaults, scoped to this conversation. */
+  provider_id?: string | null;
+  model?: string | null;
+  temperature?: number | null;
+  max_tokens?: number | null;
+  top_p?: number | null;
 }
 
 export async function createConversation(
   input: CreateConversationInput,
 ): Promise<string> {
-  // iron law: user_persona_id is required.
-  if (!input.user_persona_id) {
-    throw new Error(
-      "Cannot create a conversation without a user persona (principle 2).",
-    );
+  if (!input.agent_id) {
+    throw new Error("Cannot create a conversation without an agent.");
   }
-  if (input.kind === "private" && input.agent_ids.length !== 1) {
-    throw new Error("Private conversations need exactly one agent.");
-  }
-  if (input.kind !== "private" && input.agent_ids.length < 2) {
-    throw new Error("Group conversations need at least two agents.");
-  }
-
   const id = newId();
   const db = await getDb();
   await db.execute(
     `INSERT INTO conversations
-     (id, kind, title, user_persona_id, task_goal, task_status,
-      cost_limit_cents, initial_responder, max_total_turns, max_per_agent_turns)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (id, title, agent_id, folder_id, provider_id, model, temperature,
+      max_tokens, top_p)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
-      input.kind,
       input.title ?? "",
-      input.user_persona_id,
-      input.task_goal ?? null,
-      input.kind === "work" ? "open" : null,
-      input.cost_limit_cents ?? null,
-      input.initial_responder ?? input.agent_ids[0] ?? null,
-      input.max_total_turns ?? null,
-      input.max_per_agent_turns ?? null,
+      input.agent_id,
+      input.folder_id ?? null,
+      input.provider_id ?? null,
+      input.model ?? null,
+      input.temperature ?? null,
+      input.max_tokens ?? null,
+      input.top_p ?? null,
     ],
   );
-  for (const aid of input.agent_ids) {
-    await db.execute(
-      `INSERT INTO conversation_agents (conversation_id, agent_id)
-       VALUES (?, ?)`,
-      [id, aid],
-    );
-  }
   return id;
 }
 
 export async function listConversations(): Promise<Conversation[]> {
   const db = await getDb();
-  const rows = await db.select<any[]>(
+  return db.select<Conversation[]>(
     "SELECT * FROM conversations ORDER BY updated_at DESC",
   );
-  return rows.map(rowToConv);
 }
 
 export async function getConversation(
   id: string,
 ): Promise<Conversation | null> {
   const db = await getDb();
-  const rows = await db.select<any[]>(
+  const rows = await db.select<Conversation[]>(
     "SELECT * FROM conversations WHERE id = ?",
     [id],
   );
-  return rows[0] ? rowToConv(rows[0]) : null;
+  return rows[0] ?? null;
 }
 
-export async function listConversationAgents(
-  conversationId: string,
-): Promise<ConversationAgent[]> {
+export async function updateConversation(
+  id: string,
+  patch: Partial<Omit<Conversation, "id" | "created_at" | "updated_at">>,
+): Promise<void> {
+  const entries = Object.entries(patch);
+  if (entries.length === 0) return;
   const db = await getDb();
-  return db.select<ConversationAgent[]>(
-    "SELECT * FROM conversation_agents WHERE conversation_id = ?",
-    [conversationId],
+  await db.execute(
+    `UPDATE conversations SET ${entries.map(([k]) => `${k} = ?`).join(", ")},
+     updated_at = datetime('now') WHERE id = ?`,
+    [...entries.map(([, v]) => v), id],
   );
 }
 
@@ -101,11 +78,14 @@ export async function updateConversationTitle(
   id: string,
   title: string,
 ): Promise<void> {
-  const db = await getDb();
-  await db.execute(
-    `UPDATE conversations SET title = ?, updated_at = datetime('now') WHERE id = ?`,
-    [title, id],
-  );
+  await updateConversation(id, { title });
+}
+
+export async function setConversationFolder(
+  id: string,
+  folderId: string | null,
+): Promise<void> {
+  await updateConversation(id, { folder_id: folderId });
 }
 
 export async function touchConversation(id: string): Promise<void> {

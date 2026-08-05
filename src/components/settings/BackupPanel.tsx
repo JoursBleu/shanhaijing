@@ -126,7 +126,7 @@ export function BackupPanel() {
           备份与恢复
         </h2>
         <p className="text-xs text-[var(--color-text-3)]">
-          备份包含 provider、agent、角色卡、技能、对话、记忆、知识库和 MCP
+          备份包含 provider、agent、技能、对话、记忆、知识库和 MCP
           配置。API Key 以本机加密形式导出，换机后需要重新填写。
         </p>
       </div>

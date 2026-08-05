@@ -19,7 +19,6 @@ import type { McpMode, ToolMode } from "@/types/domain";
 interface Draft {
   id?: string;
   name: string;
-  signature: string;
   persona_text: string;
   greeting: string;
   provider_id: string;
@@ -27,7 +26,6 @@ interface Draft {
   temperature: number;
   top_p: number;
   max_tokens: string;
-  card_id: string;
   skill_ids: string[];
   tool_mode: ToolMode;
   mcp_mode: McpMode;
@@ -37,7 +35,6 @@ interface Draft {
 
 const EMPTY: Draft = {
   name: "",
-  signature: "",
   persona_text: "",
   greeting: "",
   provider_id: "",
@@ -45,7 +42,6 @@ const EMPTY: Draft = {
   temperature: 0.7,
   top_p: 1,
   max_tokens: "",
-  card_id: "",
   skill_ids: [],
   tool_mode: "auto",
   mcp_mode: "auto",
@@ -56,7 +52,6 @@ const EMPTY: Draft = {
 export function AgentsPanel() {
   const agents = useData((s) => s.agents);
   const providers = useData((s) => s.providers);
-  const cards = useData((s) => s.cards);
   const skills = useData((s) => s.skills);
   const reload = useData((s) => s.reloadAgents);
 
@@ -132,7 +127,6 @@ export function AgentsPanel() {
     setEditing({
       id: a.id,
       name: a.name,
-      signature: a.signature,
       persona_text: a.persona_text ?? "",
       greeting: a.greeting ?? "",
       provider_id: a.default_provider_id ?? "",
@@ -140,7 +134,6 @@ export function AgentsPanel() {
       temperature: a.default_temperature,
       top_p: a.default_top_p,
       max_tokens: a.default_max_tokens?.toString() ?? "",
-      card_id: a.card_id ?? "",
       skill_ids: [],
       tool_mode: a.tool_mode,
       mcp_mode: a.mcp_mode,
@@ -165,7 +158,6 @@ export function AgentsPanel() {
       return;
     const payload = {
       name: editing.name.trim(),
-      signature: editing.signature,
       persona_text: editing.persona_text || null,
       greeting: editing.greeting || null,
       default_provider_id: editing.provider_id,
@@ -175,7 +167,6 @@ export function AgentsPanel() {
       default_max_tokens: editing.max_tokens
         ? Number(editing.max_tokens)
         : null,
-      card_id: editing.card_id || null,
       tool_mode: editing.tool_mode,
       mcp_mode: editing.mcp_mode,
       max_tool_calls: editing.max_tool_calls,
@@ -200,10 +191,9 @@ export function AgentsPanel() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">Agents（好友）</h2>
+      <h2 className="text-lg font-semibold">Agents</h2>
       <p className="text-sm text-[var(--color-text-3)]">
-        每个 agent 是一个独立的"人"：名字、签名、人格、默认模型。v0.3
-        起可以加角色卡、Skill 和记忆。
+        一个 agent = 人格 + 默认模型 + 技能 + 能调用的工具和知识库。
       </p>
 
       {(unconfigured.length > 0 || agents.length > 0) && (
@@ -328,14 +318,6 @@ export function AgentsPanel() {
               onChange={(e) => setEditing({ ...editing, name: e.target.value })}
             />
           </Field>
-          <Field label="签名（一行简介）">
-            <Input
-              value={editing.signature}
-              onChange={(e) =>
-                setEditing({ ...editing, signature: e.target.value })
-              }
-            />
-          </Field>
           <Field
             label="人格 / System prompt"
             hint="留空则用 “You are {name}.” 作为默认"
@@ -451,22 +433,6 @@ export function AgentsPanel() {
           </div>
 
           <div className="grid grid-cols-1 gap-3">
-            <Field label="角色卡（可选）" hint="选定后会覆盖人格 / 系统提示">
-              <select
-                className="h-9 w-full rounded-md bg-[var(--color-bg-3)] px-2.5 text-sm"
-                value={editing.card_id}
-                onChange={(e) =>
-                  setEditing({ ...editing, card_id: e.target.value })
-                }
-              >
-                <option value="">（不绑卡）</option>
-                {cards.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
             <Field label="技能（可多选）">
               <div className="space-y-1 max-h-48 overflow-auto border border-[var(--color-border)] rounded p-2">
                 {skills.length === 0 ? (

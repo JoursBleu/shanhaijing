@@ -1,46 +1,32 @@
 import { create } from "zustand";
 import type {
   Agent,
-  CharacterCard,
   Conversation,
   Folder,
   Message,
   Provider,
   Skill,
-  UserPersona,
 } from "@/types/domain";
 import { listProviders } from "@/repos/providers";
-import { listPersonas } from "@/repos/personas";
 import { listAgents } from "@/repos/agents";
-import {
-  listConversations,
-  listConversationAgents,
-} from "@/repos/conversations";
+import { listConversations } from "@/repos/conversations";
 import { listMessages } from "@/repos/messages";
-import { listCards } from "@/repos/cards";
 import { listSkills } from "@/repos/skills";
 import { listFolders } from "@/repos/folders";
 
 interface DataState {
   providers: Provider[];
-  personas: UserPersona[];
   agents: Agent[];
   conversations: Conversation[];
-  cards: CharacterCard[];
   skills: Skill[];
   convFolders: Folder[];
-  // by conversation id
-  convAgentIds: Record<string, string[]>;
   messagesByConv: Record<string, Message[]>;
 
   reloadProviders: () => Promise<void>;
-  reloadPersonas: () => Promise<void>;
   reloadAgents: () => Promise<void>;
   reloadConversations: () => Promise<void>;
-  reloadCards: () => Promise<void>;
   reloadSkills: () => Promise<void>;
   reloadFolders: () => Promise<void>;
-  reloadConvAgents: (convId: string) => Promise<void>;
   reloadMessages: (convId: string) => Promise<void>;
   reloadAll: () => Promise<void>;
 
@@ -59,7 +45,6 @@ export function localMessage(
     active_branch_id: null,
     variant_group_id: null,
     variant_index: 0,
-    mentioned_agent_ids: "[]",
     turn_id: null,
     in_reply_to_message_id: null,
     tokens_in: null,
@@ -76,30 +61,19 @@ export function localMessage(
 
 export const useData = create<DataState>((set, get) => ({
   providers: [],
-  personas: [],
   agents: [],
   conversations: [],
-  cards: [],
   skills: [],
   convFolders: [],
-  convAgentIds: {},
   messagesByConv: {},
 
   reloadProviders: async () => set({ providers: await listProviders() }),
-  reloadPersonas: async () => set({ personas: await listPersonas() }),
   reloadAgents: async () => set({ agents: await listAgents() }),
   reloadConversations: async () =>
     set({ conversations: await listConversations() }),
-  reloadCards: async () => set({ cards: await listCards() }),
   reloadSkills: async () => set({ skills: await listSkills() }),
   reloadFolders: async () => set({ convFolders: await listFolders("conversation") }),
 
-  reloadConvAgents: async (convId) => {
-    const rows = await listConversationAgents(convId);
-    set((s) => ({
-      convAgentIds: { ...s.convAgentIds, [convId]: rows.map((r) => r.agent_id) },
-    }));
-  },
   reloadMessages: async (convId) => {
     const rows = await listMessages(convId);
     set((s) => ({ messagesByConv: { ...s.messagesByConv, [convId]: rows } }));
@@ -108,10 +82,8 @@ export const useData = create<DataState>((set, get) => ({
   reloadAll: async () => {
     await Promise.all([
       get().reloadProviders(),
-      get().reloadPersonas(),
       get().reloadAgents(),
       get().reloadConversations(),
-      get().reloadCards(),
       get().reloadSkills(),
       get().reloadFolders(),
     ]);

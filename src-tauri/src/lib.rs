@@ -45,6 +45,12 @@ pub fn run() {
             sql: include_str!("../../src/db/migrations/0007_tool_messages.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 8,
+            description: "focus on single-agent tooling",
+            sql: include_str!("../../src/db/migrations/0008_agent_focus.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

@@ -5,9 +5,7 @@ type ViewKind =
   | { kind: "welcome" }
   | { kind: "conversation"; id: ID }
   | { kind: "settings" }
-  | { kind: "personas" }
   | { kind: "agents" }
-  | { kind: "cards" }
   | { kind: "skills" }
   | { kind: "memories" }
   | { kind: "mcp" }
@@ -19,9 +17,6 @@ type ViewKind =
 interface UIState {
   view: ViewKind;
   setView: (v: ViewKind) => void;
-
-  activePersonaId: ID | null;
-  setActivePersonaId: (id: ID | null) => void;
 
   showPromptDebug: boolean;
   togglePromptDebug: () => void;
@@ -44,7 +39,6 @@ interface UIState {
   setLanguage: (l: "zh" | "en") => void;
 }
 
-const LS_PERSONA = "shanhaijing.active-persona";
 const LS_THEME = "shanhaijing.theme";
 const LS_LANG = "shanhaijing.language";
 
@@ -57,16 +51,6 @@ function applyTheme(t: "dark" | "light") {
 export const useUI = create<UIState>((set) => ({
   view: { kind: "welcome" },
   setView: (v) => set({ view: v }),
-
-  activePersonaId:
-    typeof localStorage !== "undefined"
-      ? localStorage.getItem(LS_PERSONA)
-      : null,
-  setActivePersonaId: (id) => {
-    if (id) localStorage.setItem(LS_PERSONA, id);
-    else localStorage.removeItem(LS_PERSONA);
-    set({ activePersonaId: id });
-  },
 
   showPromptDebug: false,
   togglePromptDebug: () =>

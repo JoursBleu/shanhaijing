@@ -53,20 +53,6 @@ export function AgentRail() {
         👥
       </RailIcon>
       <RailIcon
-        active={view.kind === "personas"}
-        onClick={() => setView({ kind: "personas" })}
-        label={t("我的身份")}
-      >
-        🪪
-      </RailIcon>
-      <RailIcon
-        active={view.kind === "cards"}
-        onClick={() => setView({ kind: "cards" })}
-        label={t("角色卡")}
-      >
-        🎴
-      </RailIcon>
-      <RailIcon
         active={view.kind === "skills"}
         onClick={() => setView({ kind: "skills" })}
         label={t("技能")}

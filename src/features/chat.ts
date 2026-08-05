@@ -1,13 +1,17 @@
 /**
- * Send a user message in a private (1v1) conversation, then stream the
- * assistant reply. Persists everything via the repos and pushes incremental
- * updates into the data store so the UI re-renders as tokens arrive.
+ * Send a user message and stream the agent's reply.
+ *
+ * A conversation has exactly one agent. Its provider/model/sampling settings
+ * default to the agent's and can be overridden per conversation.
+ *
+ * Both sending and regenerating run through the agent loop, so a regenerated
+ * answer has the same tool access as the original — previously regenerate fell
+ * back to a plain stream and silently lost tools.
  */
 
 import { useData } from "@/stores/data";
-import { getConversation, listConversationAgents } from "@/repos/conversations";
+import { getConversation } from "@/repos/conversations";
 import { getAgent } from "@/repos/agents";
-import { getPersona } from "@/repos/personas";
 import { getProvider } from "@/repos/providers";
 import {
   insertMessage,
@@ -17,17 +21,72 @@ import {
   localMessage,
 } from "@/repos/messages";
 import { decryptSecret } from "@/lib/crypto";
-import { streamChat, type ChatMessage } from "@/llm/openai";
+import type { ChatMessage } from "@/llm/openai";
 import { buildSystemPrompt } from "@/llm/prompt";
-import { getCard } from "@/repos/cards";
 import { listAgentSkills } from "@/repos/skills";
-import { retrieveMemories as retrieveMemoriesForAgent } from "@/features/memoryRetrieval";
+import { retrieveMemories } from "@/features/memoryRetrieval";
 import { pickActiveVariants } from "@/lib/variants";
-import { regenerateAssistantMessageInGroup } from "@/features/groupChat";
 import { runAgentTurn } from "@/features/agentLoop";
 import { resolveAgentTools } from "@/features/agentTools";
 import { buildWireHistory, persistToolMessages } from "@/features/wireHistory";
 import { confirmModal } from "@/stores/dialog";
+import type { Agent, Conversation, Provider } from "@/types/domain";
+
+interface TurnContext {
+  conv: Conversation;
+  agent: Agent;
+  provider: Provider;
+  apiKey: string;
+  model: string;
+  temperature: number;
+  top_p: number;
+  max_tokens: number | null;
+}
+
+async function resolveTurn(conversationId: string): Promise<TurnContext> {
+  const conv = await getConversation(conversationId);
+  if (!conv) throw new Error("Conversation not found");
+  if (!conv.agent_id) throw new Error("This conversation has no agent");
+
+  const agent = await getAgent(conv.agent_id);
+  if (!agent) throw new Error("Agent missing");
+
+  const providerId = conv.provider_id ?? agent.default_provider_id;
+  if (!providerId) throw new Error("Agent has no provider configured");
+  const provider = await getProvider(providerId);
+  if (!provider) throw new Error("Provider missing");
+
+  const model = conv.model ?? agent.default_model;
+  if (!model) throw new Error("Agent has no model configured");
+
+  return {
+    conv,
+    agent,
+    provider,
+    apiKey: await decryptSecret(provider.api_key_encrypted),
+    model,
+    temperature: conv.temperature ?? agent.default_temperature,
+    top_p: conv.top_p ?? agent.default_top_p,
+    max_tokens: conv.max_tokens ?? agent.default_max_tokens,
+  };
+}
+
+async function approveTool(agentName: string) {
+  return async ({ name, args }: { name: string; args: unknown }) => {
+    let a = "";
+    try {
+      a = JSON.stringify(args);
+    } catch {
+      a = String(args);
+    }
+    return confirmModal({
+      title: `允许 ${agentName} 调用工具「${name}」？`,
+      body: `参数：${a}`,
+      confirmText: "允许",
+      cancelText: "拒绝",
+    });
+  };
+}
 
 export interface SendUserMessageInput {
   conversationId: string;
@@ -46,40 +105,13 @@ export async function sendUserMessage(
 ): Promise<SendResult> {
   const { conversationId, content, signal } = input;
   const data = useData.getState();
+  const ctx = await resolveTurn(conversationId);
+  const { agent } = ctx;
 
-  const conv = await getConversation(conversationId);
-  if (!conv) throw new Error("Conversation not found");
-  const persona = await getPersona(conv.user_persona_id);
-  if (!persona) throw new Error("User persona missing");
-
-  if (conv.kind !== "private") {
-    throw new Error("sendUserMessage is for private convs; use sendUserMessageInGroup");
-  }
-  const convAgents = await listConversationAgents(conversationId);
-  if (convAgents.length !== 1) {
-    throw new Error("Private conversation must have exactly one agent");
-  }
-  const ca = convAgents[0]!;
-  const agent = await getAgent(ca.agent_id);
-  if (!agent) throw new Error("Agent missing");
-
-  const providerId = ca.provider_id ?? agent.default_provider_id;
-  if (!providerId) throw new Error("Agent has no provider configured");
-  const provider = await getProvider(providerId);
-  if (!provider) throw new Error("Provider missing");
-
-  const model = ca.model ?? agent.default_model;
-  if (!model) throw new Error("Agent has no model configured");
-
-  const temperature = ca.temperature ?? agent.default_temperature;
-  const top_p = ca.top_p ?? agent.default_top_p;
-  const max_tokens = ca.max_tokens ?? agent.default_max_tokens;
-
-  // 1. persist user message
   const userMessageId = await insertMessage({
     conversation_id: conversationId,
     role: "user",
-    sender_id: persona.id,
+    sender_id: null,
     content,
   });
   data.appendMessageLocal(
@@ -88,19 +120,23 @@ export async function sendUserMessage(
       id: userMessageId,
       conversation_id: conversationId,
       role: "user",
-      sender_id: persona.id,
+      sender_id: null,
       content,
     }),
   );
 
-  // 2. build history + system prompt
   const history = await listMessages(conversationId);
-  const card = agent.card_id ? await getCard(agent.card_id) : null;
   const skills = await listAgentSkills(agent.id);
-  const memories = await retrieveMemoriesForAgent(agent.id, content, 5);
+  const memories = await retrieveMemories(agent.id, content, 5);
+  const caps = await resolveAgentTools(agent);
   const sys: ChatMessage = {
     role: "system",
-    content: buildSystemPrompt({ agent, user: persona, card, skills, conversation: conv, memories }),
+    content: buildSystemPrompt({
+      agent,
+      skills,
+      memories,
+      toolNames: caps.tools.map((t) => t.name),
+    }),
   };
   const wire: ChatMessage[] = [
     sys,
@@ -110,7 +146,6 @@ export async function sendUserMessage(
     ),
   ];
 
-  // 3. open assistant placeholder
   const assistantMessageId = await insertMessage({
     conversation_id: conversationId,
     role: "assistant",
@@ -132,41 +167,24 @@ export async function sendUserMessage(
     }),
   );
 
-  // 4. run the agent turn (tool-calling loop; degrades to a plain stream if the
-  //    model doesn't support tools or none are registered).
-  const apiKey = await decryptSecret(provider.api_key_encrypted);
-  const caps = await resolveAgentTools(agent);
   let acc = "";
   let usage: any = undefined;
   try {
     const result = await runAgentTurn({
-      base_url: provider.base_url,
-      api_key: apiKey,
-      model,
+      base_url: ctx.provider.base_url,
+      api_key: ctx.apiKey,
+      model: ctx.model,
       messages: wire,
       tools: caps.tools,
       maxRounds: caps.maxRounds,
       knowledgeBaseIds: caps.knowledgeBaseIds,
-      temperature,
-      top_p,
-      max_tokens,
+      temperature: ctx.temperature,
+      top_p: ctx.top_p,
+      max_tokens: ctx.max_tokens,
       conversationId,
       agentId: agent.id,
       signal,
-      approve: async ({ name, args }) => {
-        let a = "";
-        try {
-          a = JSON.stringify(args);
-        } catch {
-          a = String(args);
-        }
-        return confirmModal({
-          title: `允许 agent 调用工具「${name}」？`,
-          body: `参数：${a}`,
-          confirmText: "允许",
-          cancelText: "拒绝",
-        });
-      },
+      approve: await approveTool(agent.name),
       onText: (full) => {
         acc = full;
         data.patchMessageLocal(conversationId, assistantMessageId, {
@@ -187,7 +205,6 @@ export async function sendUserMessage(
     data.patchMessageLocal(conversationId, assistantMessageId, { content: acc });
   }
 
-  // 5. persist final content + usage
   await updateMessageContent(assistantMessageId, acc, {
     tokens_in: usage?.prompt_tokens,
     tokens_out: usage?.completion_tokens,
@@ -203,76 +220,52 @@ export interface RegenerateInput {
 }
 
 /**
- * Create a new assistant variant for the given assistant message, in the same
- * variant group. History is the conversation up to (but not including) the
- * variant being regenerated; only the "latest" variant per group is used when
- * building wire history (matches the default UI behavior).
+ * Produce another answer for the same question as a sibling variant, so the
+ * user can swipe between them.
  */
 export async function regenerateAssistantMessage(
   input: RegenerateInput,
 ): Promise<string> {
   const { conversationId, assistantMessageId, signal } = input;
   const data = useData.getState();
-
-  const conv = await getConversation(conversationId);
-  if (!conv) throw new Error("Conversation not found");
-  const persona = await getPersona(conv.user_persona_id);
-  if (!persona) throw new Error("User persona missing");
-  if (conv.kind !== "private") {
-    return regenerateAssistantMessageInGroup(input);
-  }
-  const convAgents = await listConversationAgents(conversationId);
-  const ca = convAgents[0]!;
-  const agent = await getAgent(ca.agent_id);
-  if (!agent) throw new Error("Agent missing");
-  const provider = await getProvider(ca.provider_id ?? agent.default_provider_id!);
-  if (!provider) throw new Error("Provider missing");
-  const model = ca.model ?? agent.default_model;
-  if (!model) throw new Error("Agent has no model configured");
+  const ctx = await resolveTurn(conversationId);
+  const { agent } = ctx;
 
   const all = await listMessages(conversationId);
   const target = all.find((m) => m.id === assistantMessageId);
   if (!target) throw new Error("Assistant message not found");
   const groupId = target.variant_group_id ?? target.id;
   const sameGroup = all.filter((m) => (m.variant_group_id ?? m.id) === groupId);
-  const nextIndex =
-    Math.max(0, ...sameGroup.map((m) => m.variant_index)) + 1;
+  const nextIndex = Math.max(0, ...sameGroup.map((m) => m.variant_index)) + 1;
 
-  // Build wire history from latest variant of each prior group, stopping
-  // just before the target group's parent reply.
-  const card = agent.card_id ? await getCard(agent.card_id) : null;
   const skills = await listAgentSkills(agent.id);
-  // Use the last user message as the retrieval query (or the target's parent if
-  // no user msg exists).
   const lastUser = [...all].reverse().find((m) => m.role === "user");
-  const memories = await retrieveMemoriesForAgent(
+  const memories = await retrieveMemories(
     agent.id,
     lastUser?.content ?? target.content ?? "",
     5,
   );
+  const caps = await resolveAgentTools(agent);
   const sys: ChatMessage = {
     role: "system",
-    content: buildSystemPrompt({ agent, user: persona, card, skills, conversation: conv, memories }),
+    content: buildSystemPrompt({
+      agent,
+      skills,
+      memories,
+      toolNames: caps.tools.map((t) => t.name),
+    }),
   };
 
-  // Group prior messages: for each variant group keep active or latest by
-  // variant_index. Skip the target group itself.
-  const prior = all.filter(
-    (m) => (m.variant_group_id ?? m.id) !== groupId,
-  );
+  // Everything except the group being regenerated; the answer is produced anew.
+  const prior = all.filter((m) => (m.variant_group_id ?? m.id) !== groupId);
   const selected = pickActiveVariants(prior, input.activeVariants ?? {});
   selected.sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
-  const wire: ChatMessage[] = [sys];
-  for (const m of selected) {
-    if (m.role === "system") continue;
-    wire.push({
-      role: m.role === "user" ? "user" : "assistant",
-      content: m.content,
-    });
-  }
+  const wire: ChatMessage[] = [
+    sys,
+    ...buildWireHistory(selected, await listToolMessages(conversationId)),
+  ];
 
-  // New variant placeholder
-  const newId_ = await insertMessage({
+  const newMessageId = await insertMessage({
     conversation_id: conversationId,
     role: "assistant",
     sender_id: agent.id,
@@ -285,7 +278,7 @@ export async function regenerateAssistantMessage(
   data.appendMessageLocal(
     conversationId,
     localMessage({
-      id: newId_,
+      id: newMessageId,
       conversation_id: conversationId,
       role: "assistant",
       sender_id: agent.id,
@@ -297,33 +290,45 @@ export async function regenerateAssistantMessage(
     }),
   );
 
-  const apiKey = await decryptSecret(provider.api_key_encrypted);
   let acc = "";
   let usage: any = undefined;
   try {
-    for await (const chunk of streamChat({
-      base_url: provider.base_url,
-      api_key: apiKey,
-      model,
+    const result = await runAgentTurn({
+      base_url: ctx.provider.base_url,
+      api_key: ctx.apiKey,
+      model: ctx.model,
       messages: wire,
-      temperature: ca.temperature ?? agent.default_temperature,
-      top_p: ca.top_p ?? agent.default_top_p,
-      max_tokens: ca.max_tokens ?? agent.default_max_tokens,
+      tools: caps.tools,
+      maxRounds: caps.maxRounds,
+      knowledgeBaseIds: caps.knowledgeBaseIds,
+      temperature: ctx.temperature,
+      top_p: ctx.top_p,
+      max_tokens: ctx.max_tokens,
+      conversationId,
+      agentId: agent.id,
       signal,
-    })) {
-      if (chunk.usage) usage = chunk.usage;
-      if (chunk.delta) {
-        acc += chunk.delta;
-        data.patchMessageLocal(conversationId, newId_, { content: acc });
-      }
-    }
+      approve: await approveTool(agent.name),
+      onText: (full) => {
+        acc = full;
+        data.patchMessageLocal(conversationId, newMessageId, { content: acc });
+      },
+    });
+    acc = result.text;
+    usage = result.usage;
+    await persistToolMessages({
+      conversationId,
+      turnId: newMessageId,
+      senderId: agent.id,
+      messages: result.toolMessages,
+    });
   } catch (e: any) {
     acc = acc + (acc ? "\n\n" : "") + `*[error: ${e?.message ?? e}]*`;
-    data.patchMessageLocal(conversationId, newId_, { content: acc });
+    data.patchMessageLocal(conversationId, newMessageId, { content: acc });
   }
-  await updateMessageContent(newId_, acc, {
+
+  await updateMessageContent(newMessageId, acc, {
     tokens_in: usage?.prompt_tokens,
     tokens_out: usage?.completion_tokens,
   });
-  return newId_;
+  return newMessageId;
 }

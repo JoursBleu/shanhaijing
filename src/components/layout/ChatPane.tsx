@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { confirmModal, alertModal } from "@/stores/dialog";
 import { useData } from "@/stores/data";
 import { useUI } from "@/stores/ui";
-import { sendMessage } from "@/features/send";
+import { sendUserMessage } from "@/features/chat";
 import { regenerateAssistantMessage } from "@/features/chat";
 import { summarizeConversation } from "@/features/summarize";
 import {
@@ -18,9 +18,7 @@ import {
 import { groupByVariant, pickActiveVariants } from "@/lib/variants";
 import { MessageBubble } from "@/components/MessageBubble";
 import { ProvidersPanel } from "@/components/settings/ProvidersPanel";
-import { PersonasPanel } from "@/components/settings/PersonasPanel";
 import { AgentsPanel } from "@/components/settings/AgentsPanel";
-import { CardsPanel } from "@/components/settings/CardsPanel";
 import { SkillsPanel } from "@/components/settings/SkillsPanel";
 import { MemoriesPanel } from "@/components/settings/MemoriesPanel";
 import { McpPanel } from "@/components/settings/McpPanel";
@@ -43,7 +41,7 @@ function Welcome() {
         <h1 className="text-2xl font-bold text-[var(--color-text-1)]">
           山海经 · Shanhaijing
         </h1>
-        <p>本地优先的 LLM 聊天客户端。一对一、多 agent 群聊都支持。</p>
+        <p>本地优先的 agent 客户端：多 provider、工具调用、MCP、知识库。</p>
         <ol className="list-decimal list-inside text-sm space-y-1">
           <li>去 ⚙ 设置里给一个 provider 填上 API key，并点 "抓模型"</li>
           <li>去 🪪 我的身份 选定/创建一个 "我"</li>
@@ -66,11 +64,8 @@ function PanelView({ children }: { children: React.ReactNode }) {
 function ConversationView({ id }: { id: string }) {
   const conv = useData((s) => s.conversations.find((c) => c.id === id));
   const messages = useData((s) => s.messagesByConv[id] ?? EMPTY);
-  const convAgentIds = useData((s) => s.convAgentIds[id] ?? EMPTY);
   const agents = useData((s) => s.agents);
-  const personas = useData((s) => s.personas);
   const reloadMessages = useData((s) => s.reloadMessages);
-  const reloadConvAgents = useData((s) => s.reloadConvAgents);
   const activeVariant = useUI((s) => s.activeVariant);
   const setActiveVariant = useUI((s) => s.setActiveVariant);
 
@@ -83,7 +78,6 @@ function ConversationView({ id }: { id: string }) {
 
   useEffect(() => {
     reloadMessages(id);
-    reloadConvAgents(id);
   }, [id]);
 
   useEffect(() => {
@@ -94,9 +88,8 @@ function ConversationView({ id }: { id: string }) {
   useEffect(() => {
     if (!conv) return;
     if (messages.length > 0) return;
-    if (conv.kind !== "private" || convAgentIds.length !== 1) return;
     if (greetingFiredRef.current.has(id)) return;
-    const agent = agents.find((a) => a.id === convAgentIds[0]);
+    const agent = agents.find((a) => a.id === conv.agent_id);
     if (!agent || !agent.greeting) return;
     greetingFiredRef.current.add(id);
     (async () => {
@@ -108,14 +101,11 @@ function ConversationView({ id }: { id: string }) {
       });
       await reloadMessages(id);
     })();
-  }, [id, conv?.id, conv?.kind, messages.length, convAgentIds.length]);
+  }, [id, conv?.id, conv?.agent_id, messages.length]);
 
   if (!conv) return <Welcome />;
 
-  const persona = personas.find((p) => p.id === conv.user_persona_id);
-  const convAgents = agents.filter((a) => convAgentIds.includes(a.id));
-  const isGroup = conv.kind !== "private";
-  const agent = convAgents[0];
+  const agent = agents.find((a) => a.id === conv.agent_id);
 
   async function send() {
     if (!input.trim() || sending) return;
@@ -123,7 +113,7 @@ function ConversationView({ id }: { id: string }) {
     setInput("");
     setSending(true);
     try {
-      await sendMessage({
+      await sendUserMessage({
         conversationId: id,
         content: text,
         activeVariants: activeVariant,
@@ -163,29 +153,20 @@ function ConversationView({ id }: { id: string }) {
   }
 
   function senderName(m: { role: string; sender_id: string | null }) {
-    if (m.role === "user") {
-      return personas.find((p) => p.id === m.sender_id)?.name ?? "我";
-    }
-    return agents.find((a) => a.id === m.sender_id)?.name ?? "(?)";
+    if (m.role === "user") return "我";
+    return agents.find((a) => a.id === m.sender_id)?.name ?? agent?.name ?? "(?)";
   }
 
   return (
     <>
       <header className="h-12 px-4 flex items-center gap-2 border-b border-[var(--color-border)]">
         <div className="size-7 rounded-full bg-[var(--color-accent)] flex items-center justify-center text-xs font-bold">
-          {isGroup ? "群" : (agent?.name ?? "?").slice(0, 1)}
+          {(agent?.name ?? "?").slice(0, 1)}
         </div>
         <div className="text-[var(--color-text-1)] text-sm flex-1 min-w-0">
           <span className="font-semibold">{conv.title || "(未命名)"}</span>
           <span className="text-[var(--color-text-3)] ml-2">
-            ·{" "}
-            {isGroup
-              ? `${convAgents.map((a) => a.name).join(" · ")} · ${conv.kind === "work" ? "工作" : "闲聊"}`
-              : agent?.name ?? "?"}{" "}
-            · 以 {persona?.name ?? "?"} 身份
-            {conv.kind === "work" && conv.task_status === "done" && (
-              <span className="ml-2 text-[var(--color-accent)]">✓ 已完成</span>
-            )}
+            · {agent?.name ?? "(agent 已删除)"}
           </span>
         </div>
         <button
@@ -308,9 +289,7 @@ function ConversationView({ id }: { id: string }) {
                 send();
               }
             }}
-            placeholder={isGroup
-              ? `在群里说点什么…用 @名字 可以点名（Enter 发送）`
-              : `和 ${agent?.name ?? "..."} 说点什么…（Enter 发送，Shift+Enter 换行）`}
+            placeholder={`和 ${agent?.name ?? "..."} 说点什么…（Enter 发送，Shift+Enter 换行）`}
             disabled={sending}
           />
           <Button onClick={send} disabled={sending || !input.trim()}>
@@ -369,16 +348,6 @@ export function ChatPane() {
           </PanelView>
         </>
       )}
-      {view.kind === "personas" && (
-        <>
-          <header className="h-12 px-4 flex items-center border-b border-[var(--color-border)] font-semibold">
-            我的身份
-          </header>
-          <PanelView>
-            <PersonasPanel />
-          </PanelView>
-        </>
-      )}
       {view.kind === "agents" && (
         <>
           <header className="h-12 px-4 flex items-center border-b border-[var(--color-border)] font-semibold">
@@ -386,16 +355,6 @@ export function ChatPane() {
           </header>
           <PanelView>
             <AgentsPanel />
-          </PanelView>
-        </>
-      )}
-      {view.kind === "cards" && (
-        <>
-          <header className="h-12 px-4 flex items-center border-b border-[var(--color-border)] font-semibold">
-            角色卡
-          </header>
-          <PanelView>
-            <CardsPanel />
           </PanelView>
         </>
       )}

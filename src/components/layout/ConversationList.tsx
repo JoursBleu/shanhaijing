@@ -5,7 +5,7 @@ import { useUI } from "@/stores/ui";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Field } from "@/components/ui/Field";
-import { Input, Textarea } from "@/components/ui/Input";
+import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/utils";
 import {
   createConversation,
@@ -18,33 +18,23 @@ import {
   setConversationFolder,
 } from "@/repos/folders";
 
-type Kind = "private" | "casual" | "work";
 
 export function ConversationList() {
   const conversations = useData((s) => s.conversations);
   const agents = useData((s) => s.agents);
   const folders = useData((s) => s.convFolders);
   const reloadConversations = useData((s) => s.reloadConversations);
-  const reloadConvAgents = useData((s) => s.reloadConvAgents);
   const reloadFolders = useData((s) => s.reloadFolders);
   const view = useUI((s) => s.view);
   const setView = useUI((s) => s.setView);
-  const activePersonaId = useUI((s) => s.activePersonaId);
   const collapsedFolders = useUI((s) => s.collapsedFolders);
   const toggleFolder = useUI((s) => s.toggleFolder);
-  const personas = useData((s) => s.personas);
 
   const [newOpen, setNewOpen] = useState(false);
-  const [kind, setKind] = useState<Kind>("private");
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [agentId, setAgentId] = useState("");
   const [title, setTitle] = useState("");
-  const [taskGoal, setTaskGoal] = useState("");
-  const [initialResponder, setInitialResponder] = useState<string>("");
   const [moveMenuFor, setMoveMenuFor] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-
-  const personaOk =
-    !!activePersonaId && !!personas.find((p) => p.id === activePersonaId);
 
   const grouped = useMemo(() => {
     const byFolder = new Map<string | null, typeof conversations>();
@@ -57,44 +47,20 @@ export function ConversationList() {
   }, [conversations]);
 
   function resetForm() {
-    setKind("private");
-    setSelectedIds([]);
+    setAgentId("");
     setTitle("");
-    setTaskGoal("");
-    setInitialResponder("");
   }
 
-  function toggle(id: string) {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  }
-
-  const valid =
-    personaOk &&
-    ((kind === "private" && selectedIds.length === 1) ||
-      (kind !== "private" && selectedIds.length >= 2));
+  const valid = !!agentId;
 
   async function startNew() {
-    if (!valid || !activePersonaId) return;
-    const firstAgentName =
-      agents.find((a) => a.id === selectedIds[0])?.name ?? "新对话";
-    const defaultTitle =
-      kind === "private"
-        ? `与 ${firstAgentName} 的对话`
-        : kind === "work"
-          ? taskGoal.slice(0, 32) || "工作群"
-          : "闲聊群";
+    if (!valid) return;
+    const agentName = agents.find((a) => a.id === agentId)?.name ?? "新对话";
     const id = await createConversation({
-      kind,
-      title: title || defaultTitle,
-      user_persona_id: activePersonaId,
-      agent_ids: selectedIds,
-      task_goal: kind === "work" ? taskGoal || null : null,
-      initial_responder: initialResponder || selectedIds[0] || null,
+      agent_id: agentId,
+      title: title || `与 ${agentName} 的对话`,
     });
     await reloadConversations();
-    await reloadConvAgents(id);
     setView({ kind: "conversation", id });
     setNewOpen(false);
     resetForm();
@@ -107,12 +73,6 @@ export function ConversationList() {
     if (view.kind === "conversation" && view.id === id) {
       setView({ kind: "welcome" });
     }
-  }
-
-  function badgeFor(k: string) {
-    if (k === "work") return "工";
-    if (k === "casual") return "群";
-    return "";
   }
 
   async function addFolder() {
@@ -143,7 +103,6 @@ export function ConversationList() {
 
   function ConvRow({ c }: { c: (typeof conversations)[number] }) {
     const isActive = view.kind === "conversation" && view.id === c.id;
-    const badge = badgeFor(c.kind);
     return (
       <div className="relative">
         <div
@@ -155,11 +114,6 @@ export function ConversationList() {
               : "text-[var(--color-text-2)] hover:bg-[var(--color-bg-3)]",
           )}
         >
-          {badge && (
-            <span className="text-[10px] px-1 py-0.5 rounded bg-[var(--color-accent)]/30 text-[var(--color-accent)]">
-              {badge}
-            </span>
-          )}
           <span className="flex-1 truncate">{c.title || "(未命名)"}</span>
           <button
             onClick={(e) => {
@@ -320,108 +274,30 @@ export function ConversationList() {
         }
       >
         <div className="space-y-3">
-          {!personaOk && (
-            <div className="text-xs text-[var(--color-warning)]">
-              请先在 🪪 我的身份 里选一个身份。
-            </div>
-          )}
-
-          <Field label="类型">
-            <div className="flex gap-2">
-              {(["private", "casual", "work"] as Kind[]).map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => {
-                    setKind(k);
-                    if (k === "private") setSelectedIds(selectedIds.slice(0, 1));
-                  }}
-                  className={cn(
-                    "flex-1 h-9 rounded-md text-sm",
-                    kind === k
-                      ? "bg-[var(--color-accent)] text-white"
-                      : "bg-[var(--color-bg-3)] text-[var(--color-text-2)]",
-                  )}
-                >
-                  {k === "private" ? "私聊" : k === "casual" ? "闲聊群" : "工作群"}
-                </button>
-              ))}
-            </div>
-          </Field>
-
-          <Field
-            label={kind === "private" ? "选一个 agent" : "选 2 个以上 agent"}
-          >
-            <div className="space-y-1 max-h-48 overflow-auto border border-[var(--color-border)] rounded p-2">
+          <Field label="选一个 agent">
+            <div className="space-y-1 max-h-60 overflow-auto border border-[var(--color-border)] rounded p-2">
               {agents.length === 0 ? (
                 <div className="text-xs text-[var(--color-text-3)]">
-                  还没有 agent。
+                  还没有 agent，去 👥 里建一个。
                 </div>
               ) : (
-                agents.map((a) => {
-                  const checked = selectedIds.includes(a.id);
-                  return (
-                    <label
-                      key={a.id}
-                      className="flex items-center gap-2 text-sm cursor-pointer"
-                    >
-                      <input
-                        type={kind === "private" ? "radio" : "checkbox"}
-                        name="agent-pick"
-                        checked={checked}
-                        onChange={() => {
-                          if (kind === "private") {
-                            setSelectedIds([a.id]);
-                          } else {
-                            toggle(a.id);
-                          }
-                        }}
-                      />
-                      <span>{a.name}</span>
-                      {a.signature && (
-                        <span className="text-xs text-[var(--color-text-3)] truncate">
-                          — {a.signature}
-                        </span>
-                      )}
-                    </label>
-                  );
-                })
+                agents.map((a) => (
+                  <label
+                    key={a.id}
+                    className="flex items-center gap-2 text-sm cursor-pointer"
+                  >
+                    <input
+                      type="radio"
+                      name="agent-pick"
+                      checked={agentId === a.id}
+                      onChange={() => setAgentId(a.id)}
+                    />
+                    <span>{a.name}</span>
+                  </label>
+                ))
               )}
             </div>
           </Field>
-
-          {kind !== "private" && selectedIds.length >= 2 && (
-            <Field label="第一个发言的 agent">
-              <select
-                className="h-9 w-full rounded-md bg-[var(--color-bg-3)] px-2.5 text-sm"
-                value={initialResponder}
-                onChange={(e) => setInitialResponder(e.target.value)}
-              >
-                <option value="">（默认第一个被选中的）</option>
-                {selectedIds.map((id) => {
-                  const a = agents.find((x) => x.id === id);
-                  return (
-                    <option key={id} value={id}>
-                      {a?.name ?? id}
-                    </option>
-                  );
-                })}
-              </select>
-            </Field>
-          )}
-
-          {kind === "work" && (
-            <Field
-              label="任务目标"
-              hint="agent 满足后会发出 <done/> 自动收尾"
-            >
-              <Textarea
-                rows={3}
-                value={taskGoal}
-                onChange={(e) => setTaskGoal(e.target.value)}
-              />
-            </Field>
-          )}
 
           <Field label="标题（可留空，自动生成）">
             <Input value={title} onChange={(e) => setTitle(e.target.value)} />

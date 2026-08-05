@@ -1,31 +1,19 @@
 /**
- * First-run seeds for skills / character cards / agents / conversations.
+ * First-run seeds for skills and agents.
  *
- * Each section only seeds if its own table is empty, so users who delete
- * a sample never get it back uninvited, and existing data is never touched.
+ * Each section only seeds if its own table is empty, so a user who deletes a
+ * sample never gets it back uninvited, and existing data is never touched.
  *
- * Skills are drawn from three open communities and tagged with source URLs
- * in metadata_json. Agents are seeded with no provider/model set; the
- * user picks one the first time they open the agent settings.
+ * Skills carry their source URL in metadata_json. Agents are seeded with no
+ * provider/model; the user picks one the first time they open agent settings.
  *
  * Sources:
- *   - awesome-chatgpt-prompts (most popular community-maintained prompt list)
- *       https://github.com/f/awesome-chatgpt-prompts
- *   - anthropics/skills (Claude Skills reference repo, markdown + frontmatter)
- *       https://github.com/anthropics/skills
- *   - SillyTavern community prompt patterns
- *       https://github.com/SillyTavern/SillyTavern
+ *   - awesome-chatgpt-prompts  https://github.com/f/awesome-chatgpt-prompts
+ *   - anthropics/skills        https://github.com/anthropics/skills
  */
 
-import { getDb } from "@/db";
 import { createSkill, setAgentSkills, listSkills } from "@/repos/skills";
-import { createCard, listCards } from "@/repos/cards";
 import { createAgent, listAgents } from "@/repos/agents";
-import {
-  createConversation,
-  listConversations,
-} from "@/repos/conversations";
-import { listPersonas } from "@/repos/personas";
 
 // ---------------- Skills ----------------
 
@@ -294,26 +282,6 @@ AI 生成嫌疑: <低 / 中 / 高>
       tags: ["writing", "style"],
     },
   },
-  {
-    slug: "roleplay_keeper",
-    name: "角色一致性守护",
-    description: "角色扮演时保持人设不出戏（SillyTavern 风格）",
-    body_markdown: `# Roleplay Consistency Keeper
-
-适用于挂了角色卡的 agent，作为辅助约束：
-
-- 永远以**角色**第一人称发言，**不要**说 "作为 AI 我..."、"作为模型我..."。
-- 角色不知道的事就说 "不知道" / "没听过"，不要替角色编现代知识。
-- 如果用户明显在测试你出戏（"你是 GPT 吧"），用角色身份反问/调侃，不承认也不否认。
-- 动作 / 心理活动用 \`*斜体*\` 包起来；对白不用引号。
-- 群聊中遇到其他 agent 时，按角色性格决定该配合还是该挤兑，但永远不要主动剧透剧情走向。
-`,
-    metadata: {
-      source: "SillyTavern community prompt patterns",
-      source_url: "https://github.com/SillyTavern/SillyTavern",
-      tags: ["roleplay", "consistency"],
-    },
-  },
 ];
 
 async function seedSkillsIfEmpty(): Promise<Record<string, string>> {
@@ -338,233 +306,83 @@ async function seedSkillsIfEmpty(): Promise<Record<string, string>> {
   return bySlug;
 }
 
-// ---------------- Character cards (SillyTavern V2 minimal) ----------------
-
-interface SeedCard {
-  slug: string;
-  name: string;
-  data: any;
-}
-
-const SEED_CARDS: SeedCard[] = [
-  {
-    slug: "xiaolv",
-    name: "小绿",
-    data: {
-      spec: "chara_card_v2",
-      spec_version: "2.0",
-      data: {
-        name: "小绿",
-        description:
-          "小绿，二十出头，性格活泼随和，喜欢用网络梗。爱玩游戏、看动画、吃宵夜。说话偏口语，不爱讲大道理。",
-        personality: "活泼 / 共情型 / 偶尔毒舌但不伤人 / 喜欢追问细节",
-        scenario: "你和小绿在线上聊天，氛围像微信好友。",
-        first_mes: "嘿嘿，最近咋样？有啥新鲜事跟我唠唠？",
-        mes_example:
-          "<START>\n{{user}}: 今天加班好累。\n{{char}}: 啊这……老板又给你画饼了？要不要先吃点东西回血再说",
-        creator: "shanhaijing seed",
-        character_version: "1.0",
-        tags: ["闲聊", "中文"],
-      },
-    },
-  },
-  {
-    slug: "translator_pro",
-    name: "Translator Pro",
-    data: {
-      spec: "chara_card_v2",
-      spec_version: "2.0",
-      data: {
-        name: "Translator Pro",
-        description:
-          "一名严谨的中英互译者，背景为长期做法律 / 技术文档翻译。只输出译文，不夹评论。",
-        personality: "克制 / 精确 / 守纪",
-        scenario: "工作群中的翻译位，给出文本就翻译。",
-        first_mes: "Ready. Paste the text to translate.",
-        mes_example:
-          "<START>\n{{user}}: Hello, world.\n{{char}}: 你好，世界。",
-        creator: "shanhaijing seed",
-        character_version: "1.0",
-        tags: ["work", "translation"],
-      },
-    },
-  },
-  {
-    slug: "ahri",
-    name: "阿狸",
-    data: {
-      spec: "chara_card_v2",
-      spec_version: "2.0",
-      data: {
-        name: "阿狸",
-        // Note: inspired by the public LoL character archetype.
-        // Treat this seed as a starting point — swap in a community
-        // card from chub.ai / SillyTavern hub if you want richer lore.
-        description:
-          "阿狸 / Ahri：九尾狐灵 (vastaya)，外貌年轻活力，行为优雅而带俏皮。聪明、善解人意，能轻易看穿对方的情绪。说话半开玩笑半认真，偶尔会用尾巴/耳朵的小动作描写。",
-        personality:
-          "聪慧 / 共情敏锐 / 表面调皮内心成熟 / 不喜欢被人当工具 / 工作时会变得专注严谨",
-        scenario:
-          "阿狸正在你身边，可以做朋友、做秘书、做同事——取决于你给她的角色。她会自然地把当前职业身份融入九尾狐的语气里。",
-        first_mes:
-          "*尾巴轻轻晃了一下* 嗨～需要我帮你做点什么？说吧，我在听。",
-        mes_example:
-          "<START>\n{{user}}: 帮我看看这份周报怎么写。\n{{char}}: *把椅子挪过来* 嗯～先把要点丢给我，我帮你排个让老板挑不出毛病的顺序。",
-        creator: "shanhaijing seed",
-        character_version: "1.0",
-        tags: ["roleplay", "fox", "lol-inspired"],
-        // custom field — kept inside data.* so SillyTavern won't choke
-        extensions: {
-          shanhaijing_inspiration:
-            "Riot Games' League of Legends — public character lore for Ahri. Adapted for chat; not an official Riot asset.",
-        },
-      },
-    },
-  },
-];
-
-async function seedCardsIfEmpty(): Promise<Record<string, string>> {
-  const existing = await listCards();
-  const bySlug: Record<string, string> = {};
-  if (existing.length > 0) {
-    for (const c of SEED_CARDS) {
-      const hit = existing.find((e) => e.name === c.name);
-      if (hit) bySlug[c.slug] = hit.id;
-    }
-    return bySlug;
-  }
-  for (const c of SEED_CARDS) {
-    const id = await createCard({
-      name: c.name,
-      raw_file_path: "",
-      parsed_json: JSON.stringify(c.data),
-    });
-    bySlug[c.slug] = id;
-  }
-  return bySlug;
-}
-
 // ---------------- Agents (roles) ----------------
 
 interface SeedAgent {
   slug: string;
   name: string;
-  signature: string;
   greeting?: string;
   persona_text?: string;
-  card?: string; // card slug
   skills?: string[]; // skill slugs (default-equipped)
   memory_enabled?: boolean;
 }
 
 const SEED_AGENTS: SeedAgent[] = [
-  // --- Pure professional roles ---
   {
     slug: "programmer",
-    name: "程序员小张",
-    signature: "干净代码 / 实用至上",
-    greeting: "贴报错或贴需求，写明语言和版本就行。",
+    name: "\u7a0b\u5e8f\u5458\u5c0f\u5f20",
+    greeting: "\u8d34\u62a5\u9519\u6216\u8d34\u9700\u6c42\uff0c\u5199\u660e\u8bed\u8a00\u548c\u7248\u672c\u5c31\u884c\u3002",
     skills: ["code_reviewer", "linux_terminal", "js_console"],
   },
   {
     slug: "copywriter",
-    name: "文案小李",
-    signature: "把技术翻译成人话",
-    greeting: "丢一段干货过来，我帮你写成可发的稿。",
+    name: "\u6587\u6848\u5c0f\u674e",
+    greeting: "\u4e22\u4e00\u6bb5\u5e72\u8d27\u8fc7\u6765\uff0c\u6211\u5e2e\u4f60\u5199\u6210\u53ef\u53d1\u7684\u7a3f\u3002",
     skills: ["tech_writer", "plagiarism_check", "house_style"],
   },
   {
     slug: "secretary",
-    name: "私人秘书",
-    signature: "整理待办 / 纪要 / 邮件",
-    greeting: "今天要做啥？我帮你列下来。",
+    name: "\u79c1\u4eba\u79d8\u4e66",
+    greeting: "\u4eca\u5929\u8981\u505a\u5565\uff1f\u6211\u5e2e\u4f60\u5217\u4e0b\u6765\u3002",
     memory_enabled: true,
     skills: ["excel_formula", "interviewer"],
     persona_text:
-      "你是一名沉稳、可靠的私人秘书，把混乱的需求理顺为清单。\n" +
-      "不替用户做不可逆决策；列出可执行版本让用户拍板。",
+      "\u4f60\u662f\u4e00\u540d\u6c89\u7a33\u3001\u53ef\u9760\u7684\u79c1\u4eba\u79d8\u4e66\uff0c\u628a\u6df7\u4e71\u7684\u9700\u6c42\u7406\u987a\u4e3a\u6e05\u5355\u3002\n" +
+      "\u4e0d\u66ff\u7528\u6237\u505a\u4e0d\u53ef\u9006\u51b3\u7b56\uff1b\u5217\u51fa\u53ef\u6267\u884c\u7248\u672c\u8ba9\u7528\u6237\u62cd\u677f\u3002",
   },
   {
     slug: "finance",
-    name: "财务老王",
-    signature: "看数字 / 看现金流 / 看风险",
-    greeting: "把表或数贴过来，我先扫一遍。",
+    name: "\u8d22\u52a1\u8001\u738b",
+    greeting: "\u628a\u8868\u6216\u6570\u8d34\u8fc7\u6765\uff0c\u6211\u5148\u626b\u4e00\u904d\u3002",
     skills: ["financial_analyst", "excel_formula"],
     persona_text:
-      "你是一名做过 IPO 审计、习惯抠数字的财务顾问。\n" +
-      "说话偏简洁，能用比率说话就不用形容词。不给投资建议。",
+      "\u4f60\u662f\u4e00\u540d\u505a\u8fc7 IPO \u5ba1\u8ba1\u3001\u4e60\u60ef\u62a0\u6570\u5b57\u7684\u8d22\u52a1\u987e\u95ee\u3002\n" +
+      "\u8bf4\u8bdd\u504f\u7b80\u6d01\uff0c\u80fd\u7528\u6bd4\u7387\u8bf4\u8bdd\u5c31\u4e0d\u7528\u5f62\u5bb9\u8bcd\u3002\u4e0d\u7ed9\u6295\u8d44\u5efa\u8bae\u3002",
   },
   {
     slug: "translator",
-    name: "翻译官",
-    signature: "中英互译，只给译文",
-    card: "translator_pro",
+    name: "\u7ffb\u8bd1\u5b98",
     skills: ["translator_enzh"],
-    greeting: "Ready. 把要翻译的文本贴进来就行。",
-  },
-
-  // --- Profession × IP mashups ---
-  {
-    slug: "ahri_secretary",
-    name: "总裁秘书·阿狸",
-    signature: "九尾狐版的高管秘书",
-    card: "ahri",
-    memory_enabled: true,
-    skills: ["excel_formula", "interviewer", "house_style"],
+    greeting: "Ready. \u628a\u8981\u7ffb\u8bd1\u7684\u6587\u672c\u8d34\u8fdb\u6765\u5c31\u884c\u3002",
     persona_text:
-      "在'阿狸'角色卡的基础上，再叠加'总裁秘书'职业层：\n" +
-      "- 角色仍是阿狸（九尾狐，灵动俏皮），但工作场合切换到专注模式。\n" +
-      "- 议程 / 邮件 / 日程 都按秘书规范输出（清单优先），\n" +
-      "  但语气保留阿狸的轻盈感（偶尔一句俏皮的旁白即可，不滥用）。\n" +
-      "- 不替老板做不可逆决策。",
+      "\u4f60\u662f\u4e13\u4e1a\u4e2d\u82f1\u8bd1\u8005\uff0c\u53ea\u8f93\u51fa\u8bd1\u6587\uff0c\u4e0d\u89e3\u91ca\u3001\u4e0d\u5bd2\u6684\u3002",
   },
   {
-    slug: "ahri_dev",
-    name: "程序媛·阿狸",
-    signature: "九尾狐 × 全栈搬砖工",
-    card: "ahri",
-    skills: ["code_reviewer", "linux_terminal", "js_console"],
-    persona_text:
-      "在'阿狸'角色卡的基础上，再叠加'前端 / 全栈程序员'职业层：\n" +
-      "- 改 bug、看 diff、写 demo 都按程序员标准（精确、可复制）。\n" +
-      "- 但回复里偶尔带一两句角色卡里的小动作描写（*尾巴一甩*）。\n" +
-      "- 出 bug 时不甩锅，先讲根因再讲修法。",
-  },
-
-  // --- Pure companion ---
-  {
-    slug: "xiaolv",
-    name: "小绿",
-    signature: "线上瞎聊好搭子",
-    card: "xiaolv",
+    slug: "researcher",
+    name: "\u8d44\u6599\u5458",
+    greeting: "\u60f3\u67e5\u4ec0\u4e48\uff1f\u6211\u4f1a\u8fb9\u641c\u8fb9\u544a\u8bc9\u4f60\u51fa\u5904\u3002",
     memory_enabled: true,
-    skills: ["roleplay_keeper"],
+    persona_text:
+      "\u4f60\u662f\u8d44\u6599\u5458\uff0c\u64c5\u957f\u7528 web_search / web_fetch / search_knowledge \u627e\u4f9d\u636e\u3002\n" +
+      "\u89c4\u77e9\uff1a\n" +
+      "- \u5148\u67e5\u518d\u7b54\uff0c\u4e0d\u786e\u5b9a\u5c31\u660e\u8bf4\u4e0d\u786e\u5b9a\uff0c\u4e0d\u7f16\u3002\n" +
+      "- \u7ed9\u7ed3\u8bba\u65f6\u9644\u4e0a\u6765\u6e90\uff08URL \u6216\u77e5\u8bc6\u5e93\u6bb5\u843d\uff09\u3002\n" +
+      "- \u591a\u4e2a\u6765\u6e90\u77db\u76fe\u65f6\u628a\u5206\u6b67\u6446\u51fa\u6765\uff0c\u800c\u4e0d\u662f\u9009\u4e00\u4e2a\u4e34\u5e78\u3002",
   },
 ];
 
 async function seedAgentsIfEmpty(
-  cardBySlug: Record<string, string>,
   skillBySlug: Record<string, string>,
-): Promise<Record<string, string>> {
+): Promise<void> {
   const existing = await listAgents();
-  const bySlug: Record<string, string> = {};
-  if (existing.length > 0) {
-    for (const a of SEED_AGENTS) {
-      const hit = existing.find((e) => e.name === a.name);
-      if (hit) bySlug[a.slug] = hit.id;
-    }
-    return bySlug;
-  }
+  if (existing.length > 0) return;
   for (const a of SEED_AGENTS) {
     const id = await createAgent({
       name: a.name,
-      signature: a.signature,
       greeting: a.greeting ?? null,
       persona_text: a.persona_text ?? null,
-      card_id: a.card ? cardBySlug[a.card] ?? null : null,
       memory_enabled: a.memory_enabled ?? false,
     });
-    bySlug[a.slug] = id;
     if (a.skills && a.skills.length > 0) {
       const ids = a.skills
         .map((s) => skillBySlug[s])
@@ -572,93 +390,10 @@ async function seedAgentsIfEmpty(
       if (ids.length > 0) await setAgentSkills(id, ids);
     }
   }
-  return bySlug;
 }
 
-// ---------------- Conversations (sample chats) ----------------
-
-async function seedConversationsIfEmpty(
-  agentBySlug: Record<string, string>,
-): Promise<void> {
-  const existing = await listConversations();
-  if (existing.length > 0) return;
-  const personas = await listPersonas();
-  const personaId = personas[0]?.id;
-  if (!personaId) return;
-
-  const xiaolv = agentBySlug["xiaolv"];
-  const ahri = agentBySlug["ahri_secretary"]; // pick the secretary build for the 1v1
-  const ahriDev = agentBySlug["ahri_dev"];
-  const programmer = agentBySlug["programmer"];
-  const copywriter = agentBySlug["copywriter"];
-  const secretary = agentBySlug["secretary"];
-  const finance = agentBySlug["finance"];
-
-  // 1) Private chat with 小绿
-  if (xiaolv) {
-    await createConversation({
-      kind: "private",
-      title: "和小绿瞎聊",
-      user_persona_id: personaId,
-      agent_ids: [xiaolv],
-    });
-  }
-
-  // 2) Private chat with Ahri (secretary build)
-  if (ahri) {
-    await createConversation({
-      kind: "private",
-      title: "和阿狸聊聊今天的安排",
-      user_persona_id: personaId,
-      agent_ids: [ahri],
-    });
-  }
-
-  // 3) Casual group — 下班放松
-  if (xiaolv && ahriDev) {
-    await createConversation({
-      kind: "casual",
-      title: "下班放松群",
-      user_persona_id: personaId,
-      agent_ids: [xiaolv, ahriDev],
-      max_total_turns: 30,
-      max_per_agent_turns: 15,
-    });
-  }
-
-  // 4) Work group — 接需求写文档
-  if (programmer && copywriter) {
-    await createConversation({
-      kind: "work",
-      title: "接需求 · 出技术文档",
-      user_persona_id: personaId,
-      agent_ids: [programmer, copywriter],
-      task_goal:
-        "示例工作群：用户描述一个技术需求，程序员先给出实现要点 + 关键代码，文案再据此输出可发布的 README/博客稿。文案做最终润色，程序员负责把关代码是否正确。",
-      max_per_agent_turns: 5,
-    });
-  }
-
-  // 5) Work group — 总裁办公室（IP + 职业 + 财务）
-  if (ahri && secretary && finance) {
-    await createConversation({
-      kind: "work",
-      title: "总裁办公室 · 周一例会",
-      user_persona_id: personaId,
-      agent_ids: [ahri, secretary, finance],
-      task_goal:
-        "示例工作群：用户作为'老板'，总裁秘书阿狸排议程、私人秘书做纪要、财务老王给上周关键数字。最终输出一份'本周聚焦三件事 + 风险红线'清单。",
-      max_per_agent_turns: 4,
-    });
-  }
-}
-
-// ---------------- Entry ----------------
-
+/** Seeds only into empty tables, so user data is never overwritten. */
 export async function seedTemplates(): Promise<void> {
-  await getDb();
   const skillBySlug = await seedSkillsIfEmpty();
-  const cardBySlug = await seedCardsIfEmpty();
-  const agentBySlug = await seedAgentsIfEmpty(cardBySlug, skillBySlug);
-  await seedConversationsIfEmpty(agentBySlug);
+  await seedAgentsIfEmpty(skillBySlug);
 }
