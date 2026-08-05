@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { confirmModal, alertModal } from "@/stores/dialog";
 import { useData } from "@/stores/data";
 import { useUI } from "@/stores/ui";
-import { sendUserMessage } from "@/features/chat";
-import { regenerateAssistantMessage } from "@/features/chat";
+import {
+  sendUserMessage,
+  regenerateAssistantMessage,
+  type TurnHost,
+} from "@/features/chat";
 import { summarizeConversation } from "@/features/summarize";
 import {
   exportConversationAsMarkdown,
@@ -107,6 +110,26 @@ function ConversationView({ id }: { id: string }) {
 
   const agent = agents.find((a) => a.id === conv.agent_id);
 
+  const turnHost: TurnHost = {
+    onMessageCreated: (m) => useData.getState().appendMessageLocal(id, m),
+    onMessageUpdated: (mid, content) =>
+      useData.getState().patchMessageLocal(id, mid, { content }),
+    approve: async ({ name, args, agentName }) => {
+      let a = "";
+      try {
+        a = JSON.stringify(args);
+      } catch {
+        a = String(args);
+      }
+      return confirmModal({
+        title: `允许 ${agentName} 调用工具「${name}」？`,
+        body: `参数：${a}`,
+        confirmText: "允许",
+        cancelText: "拒绝",
+      });
+    },
+  };
+
   async function send() {
     if (!input.trim() || sending) return;
     const text = input.trim();
@@ -114,6 +137,7 @@ function ConversationView({ id }: { id: string }) {
     setSending(true);
     try {
       await sendUserMessage({
+        ...turnHost,
         conversationId: id,
         content: text,
         activeVariants: activeVariant,
@@ -129,6 +153,7 @@ function ConversationView({ id }: { id: string }) {
     setSending(true);
     try {
       const newId = await regenerateAssistantMessage({
+        ...turnHost,
         conversationId: id,
         assistantMessageId: messageId,
         activeVariants: activeVariant,

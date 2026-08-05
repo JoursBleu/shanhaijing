@@ -9,7 +9,6 @@
  * back to a plain stream and silently lost tools.
  */
 
-import { useData } from "@/stores/data";
 import { getConversation } from "@/repos/conversations";
 import { getAgent } from "@/repos/agents";
 import { getProvider } from "@/repos/providers";
@@ -29,8 +28,20 @@ import { pickActiveVariants } from "@/lib/variants";
 import { runAgentTurn } from "@/features/agentLoop";
 import { resolveAgentTools } from "@/features/agentTools";
 import { buildWireHistory, persistToolMessages } from "@/features/wireHistory";
-import { confirmModal } from "@/stores/dialog";
-import type { Agent, Conversation, Provider } from "@/types/domain";
+import type { Agent, Conversation, Message, Provider } from "@/types/domain";
+
+/**
+ * Everything the turn needs from the outside world. The agent loop must not
+ * reach into the UI: whoever calls it decides how a new message is shown and
+ * how the user is asked to approve a tool. That is what lets this same code
+ * run headless later.
+ */
+export interface TurnHost {
+  onMessageCreated?: (m: Message) => void;
+  onMessageUpdated?: (id: string, content: string) => void;
+  /** Resolve true to run a tool that is not auto-approved. Default: allow. */
+  approve?: (call: { name: string; args: unknown; agentName: string }) => Promise<boolean>;
+}
 
 interface TurnContext {
   conv: Conversation;
@@ -71,24 +82,7 @@ async function resolveTurn(conversationId: string): Promise<TurnContext> {
   };
 }
 
-async function approveTool(agentName: string) {
-  return async ({ name, args }: { name: string; args: unknown }) => {
-    let a = "";
-    try {
-      a = JSON.stringify(args);
-    } catch {
-      a = String(args);
-    }
-    return confirmModal({
-      title: `允许 ${agentName} 调用工具「${name}」？`,
-      body: `参数：${a}`,
-      confirmText: "允许",
-      cancelText: "拒绝",
-    });
-  };
-}
-
-export interface SendUserMessageInput {
+export interface SendUserMessageInput extends TurnHost {
   conversationId: string;
   content: string;
   signal?: AbortSignal;
@@ -104,7 +98,6 @@ export async function sendUserMessage(
   input: SendUserMessageInput,
 ): Promise<SendResult> {
   const { conversationId, content, signal } = input;
-  const data = useData.getState();
   const ctx = await resolveTurn(conversationId);
   const { agent } = ctx;
 
@@ -114,8 +107,7 @@ export async function sendUserMessage(
     sender_id: null,
     content,
   });
-  data.appendMessageLocal(
-    conversationId,
+  input.onMessageCreated?.(
     localMessage({
       id: userMessageId,
       conversation_id: conversationId,
@@ -154,8 +146,7 @@ export async function sendUserMessage(
     parent_id: userMessageId,
     in_reply_to_message_id: userMessageId,
   });
-  data.appendMessageLocal(
-    conversationId,
+  input.onMessageCreated?.(
     localMessage({
       id: assistantMessageId,
       conversation_id: conversationId,
@@ -184,12 +175,12 @@ export async function sendUserMessage(
       conversationId,
       agentId: agent.id,
       signal,
-      approve: await approveTool(agent.name),
+      approve: input.approve
+        ? (c) => input.approve!({ ...c, agentName: agent.name })
+        : undefined,
       onText: (full) => {
         acc = full;
-        data.patchMessageLocal(conversationId, assistantMessageId, {
-          content: acc,
-        });
+        input.onMessageUpdated?.(assistantMessageId, acc);
       },
     });
     acc = result.text;
@@ -202,7 +193,7 @@ export async function sendUserMessage(
     });
   } catch (e: any) {
     acc = acc + (acc ? "\n\n" : "") + `*[error: ${e?.message ?? e}]*`;
-    data.patchMessageLocal(conversationId, assistantMessageId, { content: acc });
+    input.onMessageUpdated?.(assistantMessageId, acc);
   }
 
   await updateMessageContent(assistantMessageId, acc, {
@@ -212,7 +203,7 @@ export async function sendUserMessage(
   return { userMessageId, assistantMessageId };
 }
 
-export interface RegenerateInput {
+export interface RegenerateInput extends TurnHost {
   conversationId: string;
   assistantMessageId: string;
   signal?: AbortSignal;
@@ -227,7 +218,6 @@ export async function regenerateAssistantMessage(
   input: RegenerateInput,
 ): Promise<string> {
   const { conversationId, assistantMessageId, signal } = input;
-  const data = useData.getState();
   const ctx = await resolveTurn(conversationId);
   const { agent } = ctx;
 
@@ -275,8 +265,7 @@ export async function regenerateAssistantMessage(
     variant_group_id: groupId,
     variant_index: nextIndex,
   });
-  data.appendMessageLocal(
-    conversationId,
+  input.onMessageCreated?.(
     localMessage({
       id: newMessageId,
       conversation_id: conversationId,
@@ -307,10 +296,12 @@ export async function regenerateAssistantMessage(
       conversationId,
       agentId: agent.id,
       signal,
-      approve: await approveTool(agent.name),
+      approve: input.approve
+        ? (c) => input.approve!({ ...c, agentName: agent.name })
+        : undefined,
       onText: (full) => {
         acc = full;
-        data.patchMessageLocal(conversationId, newMessageId, { content: acc });
+        input.onMessageUpdated?.(newMessageId, acc);
       },
     });
     acc = result.text;
@@ -323,7 +314,7 @@ export async function regenerateAssistantMessage(
     });
   } catch (e: any) {
     acc = acc + (acc ? "\n\n" : "") + `*[error: ${e?.message ?? e}]*`;
-    data.patchMessageLocal(conversationId, newMessageId, { content: acc });
+    input.onMessageUpdated?.(newMessageId, acc);
   }
 
   await updateMessageContent(newMessageId, acc, {
