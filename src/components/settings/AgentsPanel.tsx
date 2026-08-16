@@ -14,7 +14,7 @@ import { listKnowledgeBases, type KnowledgeBase } from "@/repos/knowledge";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Field } from "@/components/ui/Field";
-import type { McpMode, ToolMode } from "@/types/domain";
+import type { AgentRuntime, McpMode, ToolMode } from "@/types/domain";
 
 interface Draft {
   id?: string;
@@ -31,6 +31,7 @@ interface Draft {
   mcp_mode: McpMode;
   max_tool_calls: number;
   kb_ids: string[];
+  runtime: AgentRuntime;
 }
 
 const EMPTY: Draft = {
@@ -47,6 +48,7 @@ const EMPTY: Draft = {
   mcp_mode: "auto",
   max_tool_calls: 6,
   kb_ids: [],
+  runtime: "legacy",
 };
 
 export function AgentsPanel() {
@@ -139,6 +141,7 @@ export function AgentsPanel() {
       mcp_mode: a.mcp_mode,
       max_tool_calls: a.max_tool_calls,
       kb_ids: [],
+      runtime: a.runtime,
     });
     listAgentSkills(a.id).then((rows) =>
       setEditing((prev) =>
@@ -170,6 +173,7 @@ export function AgentsPanel() {
       tool_mode: editing.tool_mode,
       mcp_mode: editing.mcp_mode,
       max_tool_calls: editing.max_tool_calls,
+      runtime: editing.runtime,
     };
     let agentId: string;
     if (editing.id) {
@@ -193,7 +197,7 @@ export function AgentsPanel() {
     <div className="space-y-4">
       <h2 className="text-lg font-semibold">Agents</h2>
       <p className="text-sm text-[var(--color-text-3)]">
-        一个 agent = 人格 + 默认模型 + 技能 + 能调用的工具和知识库。
+        一个 agent = Runtime + 人格 + 默认模型 + 技能 + 能调用的工具和知识库。
       </p>
 
       {(unconfigured.length > 0 || agents.length > 0) && (
@@ -293,7 +297,7 @@ export function AgentsPanel() {
               <div className="flex-1 text-sm">
                 <div className="font-medium">{a.name}</div>
                 <div className="text-[var(--color-text-3)] text-xs">
-                  {p?.name ?? "(no provider)"} · {a.default_model ?? "(no model)"}
+                  {a.runtime === "dsh" ? "DSH" : "Legacy"} · {p?.name ?? "(no provider)"} · {a.default_model ?? "(no model)"}
                 </div>
               </div>
               <Button size="sm" variant="ghost" onClick={() => startEdit(a.id)}>
@@ -317,6 +321,24 @@ export function AgentsPanel() {
               value={editing.name}
               onChange={(e) => setEditing({ ...editing, name: e.target.value })}
             />
+          </Field>
+          <Field
+            label="Agent Runtime"
+            hint="PoC 阶段需显式选择 Harness；通过兼容与安全门槛后再切为默认。现有会话不会自动迁移"
+          >
+            <select
+              className="h-9 w-full rounded-md bg-[var(--color-bg-3)] px-2.5 text-sm"
+              value={editing.runtime}
+              onChange={(e) =>
+                setEditing({
+                  ...editing,
+                  runtime: e.target.value as AgentRuntime,
+                })
+              }
+            >
+              <option value="dsh">DeepSeek Harness（PoC）</option>
+              <option value="legacy">Legacy compatibility runtime</option>
+            </select>
           </Field>
           <Field
             label="人格 / System prompt"

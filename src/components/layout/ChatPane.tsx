@@ -79,6 +79,7 @@ function ConversationView({ id }: { id: string }) {
   const [promptDebug, setPromptDebug] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const greetingFiredRef = useRef<Set<string>>(new Set());
+  const turnAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     reloadMessages(id);
@@ -134,6 +135,8 @@ function ConversationView({ id }: { id: string }) {
   async function send() {
     if (!input.trim() || sending) return;
     const text = input.trim();
+    const controller = new AbortController();
+    turnAbortRef.current = controller;
     setInput("");
     setSending(true);
     try {
@@ -141,22 +144,27 @@ function ConversationView({ id }: { id: string }) {
         ...turnHost,
         conversationId: id,
         content: text,
+        signal: controller.signal,
         activeVariants: activeVariant,
       });
     } catch (e: any) {
       void alertModal({ title: "发送失败", body: String(e?.message ?? e) });
     } finally {
+      turnAbortRef.current = null;
       setSending(false);
     }
   }
 
   async function regenerate(messageId: string) {
+    const controller = new AbortController();
+    turnAbortRef.current = controller;
     setSending(true);
     try {
       const newId = await regenerateAssistantMessage({
         ...turnHost,
         conversationId: id,
         assistantMessageId: messageId,
+        signal: controller.signal,
         activeVariants: activeVariant,
       });
       // Find the group id for this message and set new variant as active.
@@ -168,6 +176,7 @@ function ConversationView({ id }: { id: string }) {
     } catch (e: any) {
       void alertModal({ title: "重生成失败", body: String(e?.message ?? e) });
     } finally {
+      turnAbortRef.current = null;
       setSending(false);
     }
   }
@@ -318,8 +327,12 @@ function ConversationView({ id }: { id: string }) {
             placeholder={`和 ${agent?.name ?? "..."} 说点什么…（Enter 发送，Shift+Enter 换行）`}
             disabled={sending}
           />
-          <Button onClick={send} disabled={sending || !input.trim()}>
-            {sending ? "…" : "发送"}
+          <Button
+            onClick={sending ? () => turnAbortRef.current?.abort() : send}
+            disabled={!sending && !input.trim()}
+            variant={sending ? "secondary" : "primary"}
+          >
+            {sending ? "停止" : "发送"}
           </Button>
         </div>
       </footer>

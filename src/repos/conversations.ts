@@ -22,11 +22,18 @@ export async function createConversation(
   }
   const id = newId();
   const db = await getDb();
+  const agents = await db.select<{ runtime: Conversation["runtime"] }[]>(
+    "SELECT runtime FROM agents WHERE id = ?",
+    [input.agent_id],
+  );
+  if (!agents[0]) {
+    throw new Error("Cannot create a conversation for a missing agent.");
+  }
   await db.execute(
     `INSERT INTO conversations
      (id, title, agent_id, folder_id, provider_id, model, temperature,
-      max_tokens, top_p)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      max_tokens, top_p, runtime)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       input.title ?? "",
@@ -37,6 +44,7 @@ export async function createConversation(
       input.temperature ?? null,
       input.max_tokens ?? null,
       input.top_p ?? null,
+      agents[0].runtime,
     ],
   );
   return id;

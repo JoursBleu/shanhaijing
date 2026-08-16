@@ -47,7 +47,7 @@ export interface AgentTurnInput {
   /** Called with the full display string (streamed text + tool trace) as it grows. */
   onText: (full: string) => void;
   onToolEvent?: (e: ToolEvent) => void;
-  /** Resolve true to run a non-auto-approve tool. Default: allow. */
+  /** Resolve true to run a non-auto-approve tool. Missing approval fails closed. */
   approve?: (call: { name: string; args: unknown }) => Promise<boolean>;
 }
 
@@ -175,8 +175,8 @@ export async function runAgentTurn(
       } else {
         const approved =
           spec.autoApprove === true ||
-          !input.approve ||
-          (await input.approve({ name: c.name, args }));
+          (input.approve !== undefined &&
+            (await input.approve({ name: c.name, args })));
         if (!approved) {
           output = "Tool call denied by the user.";
           trace.push({ kind: "denied", name: c.name, args });

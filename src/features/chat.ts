@@ -25,10 +25,13 @@ import { buildSystemPrompt } from "@/llm/prompt";
 import { listAgentSkills } from "@/repos/skills";
 import { retrieveMemories } from "@/features/memoryRetrieval";
 import { pickActiveVariants } from "@/lib/variants";
-import { runAgentTurn } from "@/features/agentLoop";
 import { resolveAgentTools } from "@/features/agentTools";
 import { buildWireHistory, persistToolMessages } from "@/features/wireHistory";
+import { getRuntimeClient } from "@/runtime";
+import { getRuntimeSession, upsertRuntimeSession } from "@/repos/runtimeSessions";
 import type { Agent, Conversation, Message, Provider } from "@/types/domain";
+import { invoke } from "@tauri-apps/api/core";
+import { newId } from "@/lib/id";
 
 /**
  * Everything the turn needs from the outside world. The agent loop must not
@@ -39,7 +42,7 @@ import type { Agent, Conversation, Message, Provider } from "@/types/domain";
 export interface TurnHost {
   onMessageCreated?: (m: Message) => void;
   onMessageUpdated?: (id: string, content: string) => void;
-  /** Resolve true to run a tool that is not auto-approved. Default: allow. */
+  /** Resolve true to run a tool that is not auto-approved. Missing approval denies. */
   approve?: (call: { name: string; args: unknown; agentName: string }) => Promise<boolean>;
 }
 
@@ -161,7 +164,18 @@ export async function sendUserMessage(
   let acc = "";
   let usage: any = undefined;
   try {
-    const result = await runAgentTurn({
+    const result = ctx.conv.runtime === "dsh"
+      ? await runDshTurn({
+          ctx,
+          content,
+          conversationId,
+          signal,
+          onText: (full) => {
+            acc = full;
+            input.onMessageUpdated?.(assistantMessageId, acc);
+          },
+        })
+      : await getRuntimeClient("legacy").submitTurn({
       base_url: ctx.provider.base_url,
       api_key: ctx.apiKey,
       model: ctx.model,
@@ -182,7 +196,7 @@ export async function sendUserMessage(
         acc = full;
         input.onMessageUpdated?.(assistantMessageId, acc);
       },
-    });
+      });
     acc = result.text;
     usage = result.usage;
     await persistToolMessages({
@@ -282,7 +296,18 @@ export async function regenerateAssistantMessage(
   let acc = "";
   let usage: any = undefined;
   try {
-    const result = await runAgentTurn({
+    const result = ctx.conv.runtime === "dsh"
+      ? await runDshTurn({
+          ctx,
+          content: lastUser?.content ?? "Regenerate the previous answer.",
+          conversationId,
+          signal,
+          onText: (full) => {
+            acc = full;
+            input.onMessageUpdated?.(newMessageId, acc);
+          },
+        })
+      : await getRuntimeClient("legacy").submitTurn({
       base_url: ctx.provider.base_url,
       api_key: ctx.apiKey,
       model: ctx.model,
@@ -303,7 +328,7 @@ export async function regenerateAssistantMessage(
         acc = full;
         input.onMessageUpdated?.(newMessageId, acc);
       },
-    });
+      });
     acc = result.text;
     usage = result.usage;
     await persistToolMessages({
@@ -322,4 +347,60 @@ export async function regenerateAssistantMessage(
     tokens_out: usage?.completion_tokens,
   });
   return newMessageId;
+}
+
+interface DshTurnOptions {
+  ctx: TurnContext;
+  content: string;
+  conversationId: string;
+  signal?: AbortSignal;
+  onText: (full: string) => void;
+}
+
+async function runDshTurn(options: DshTurnOptions) {
+  const existing = await getRuntimeSession(options.conversationId);
+  const sessionId = existing?.runtime_session_id ?? `shj-${newId()}`;
+  if (!existing) {
+    await upsertRuntimeSession({
+      conversation_id: options.conversationId,
+      runtime: "dsh",
+      runtime_session_id: sessionId,
+      bridge_protocol_version: 1,
+      state: "creating",
+    });
+  }
+  try {
+    const result = await getRuntimeClient("dsh").submitTurn({
+      conversationId: options.conversationId,
+      content: options.content,
+      sessionId,
+      cwd: await invoke<string>("runtime_workspace_path", {
+        conversationId: options.conversationId,
+      }),
+      provider: "deepseek-official",
+      model: options.ctx.model,
+      baseUrl: options.ctx.provider.base_url,
+      apiKey: options.ctx.apiKey,
+      maxTokens: options.ctx.max_tokens ?? undefined,
+      signal: options.signal,
+      onText: options.onText,
+    });
+    await upsertRuntimeSession({
+      conversation_id: options.conversationId,
+      runtime: "dsh",
+      runtime_session_id: sessionId,
+      bridge_protocol_version: 1,
+      state: "ready",
+    });
+    return result;
+  } catch (error) {
+    await upsertRuntimeSession({
+      conversation_id: options.conversationId,
+      runtime: "dsh",
+      runtime_session_id: sessionId,
+      bridge_protocol_version: 1,
+      state: "failed",
+    });
+    throw error;
+  }
 }

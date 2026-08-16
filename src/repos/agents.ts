@@ -1,6 +1,6 @@
 import { getDb } from "@/db";
 import { newId } from "@/lib/id";
-import type { Agent, McpMode, ToolMode } from "@/types/domain";
+import type { Agent, AgentRuntime, McpMode, ToolMode } from "@/types/domain";
 
 function rowToAgent(r: any): Agent {
   return {
@@ -10,6 +10,7 @@ function rowToAgent(r: any): Agent {
     mcp_mode: (r.mcp_mode ?? "auto") as McpMode,
     max_tool_calls: r.max_tool_calls ?? 6,
     enabled_tools_json: r.enabled_tools_json ?? null,
+    runtime: (r.runtime ?? "legacy") as AgentRuntime,
   } as Agent;
 }
 
@@ -44,6 +45,7 @@ export interface AgentInput {
   mcp_mode?: McpMode;
   max_tool_calls?: number;
   enabled_tools_json?: string | null;
+  runtime?: AgentRuntime;
 }
 
 export async function createAgent(input: AgentInput): Promise<string> {
@@ -54,8 +56,8 @@ export async function createAgent(input: AgentInput): Promise<string> {
      (id, name, avatar_path, default_provider_id, default_model,
       default_temperature, default_max_tokens, default_top_p,
       persona_text, greeting, memory_enabled, folder_id,
-      tool_mode, mcp_mode, max_tool_calls, enabled_tools_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      tool_mode, mcp_mode, max_tool_calls, enabled_tools_json, runtime)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       input.name,
@@ -73,6 +75,7 @@ export async function createAgent(input: AgentInput): Promise<string> {
       input.mcp_mode ?? "auto",
       input.max_tool_calls ?? 6,
       input.enabled_tools_json ?? null,
+      input.runtime ?? "legacy",
     ],
   );
   return id;

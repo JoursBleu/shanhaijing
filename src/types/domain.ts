@@ -4,6 +4,7 @@
  */
 
 export type ID = string; // ulid
+export type AgentRuntime = "legacy" | "dsh";
 
 export interface Provider {
   id: ID;
@@ -47,6 +48,8 @@ export interface Agent {
   max_tool_calls: number;
   /** JSON string[] whitelist of tool names; null = every tool of an enabled kind. */
   enabled_tools_json: string | null;
+  /** Default runtime copied into new conversations. */
+  runtime: AgentRuntime;
   created_at: string;
 }
 
@@ -89,9 +92,29 @@ export interface Conversation {
   temperature: number | null;
   max_tokens: number | null;
   top_p: number | null;
+  /** Runtime snapshot; changing the Agent does not migrate existing history. */
+  runtime: AgentRuntime;
 
   cost_used_cents: number;
 
+  created_at: string;
+  updated_at: string;
+}
+
+export type RuntimeSessionState =
+  | "creating"
+  | "ready"
+  | "running"
+  | "stopped"
+  | "failed";
+
+export interface RuntimeSession {
+  conversation_id: ID;
+  runtime: AgentRuntime;
+  runtime_session_id: string;
+  bridge_protocol_version: number;
+  last_event_cursor: string | null;
+  state: RuntimeSessionState;
   created_at: string;
   updated_at: string;
 }

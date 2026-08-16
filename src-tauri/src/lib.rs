@@ -1,5 +1,8 @@
 use tauri_plugin_sql::{Migration, MigrationKind};
 
+mod runtime;
+mod runtime_rpc;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let migrations = vec![
@@ -51,9 +54,25 @@ pub fn run() {
             sql: include_str!("../../src/db/migrations/0008_agent_focus.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 9,
+            description: "agent runtime and runtime session mapping",
+            sql: include_str!("../../src/db/migrations/0009_runtime.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
+        .manage(runtime::RuntimeManager::new())
+        .invoke_handler(tauri::generate_handler![
+            runtime::runtime_status,
+            runtime::runtime_start,
+            runtime::runtime_initialize,
+            runtime::runtime_prompt,
+            runtime::runtime_stop,
+            runtime::runtime_restart,
+            runtime::runtime_workspace_path,
+        ])
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
