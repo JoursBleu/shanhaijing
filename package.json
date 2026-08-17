@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "prepare:dsh-runtime:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-dsh-runtime.ps1",
     "preview": "vite preview",
     "test:dsh-smoke": "node scripts/dsh-smoke.mjs",
     "tauri": "tauri"

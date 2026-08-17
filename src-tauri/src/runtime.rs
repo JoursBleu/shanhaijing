@@ -278,10 +278,17 @@ struct RuntimeLaunch {
 }
 
 fn runtime_launch(app: &AppHandle) -> Result<RuntimeLaunch, String> {
-    let config = std::env::var_os("SHANHAIJING_DSH_CORDIS_CONFIG")
+    let configured = std::env::var_os("SHANHAIJING_DSH_CORDIS_CONFIG")
         .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dsh/cordis.yml"));
+        .map(PathBuf::from);
+    let resource_root = app.path().resource_dir().ok();
+    let packaged_config = resource_root
+        .as_ref()
+        .map(|root| root.join("dsh").join("cordis.yml"))
+        .filter(|path| path.is_file());
+    let config = configured.or(packaged_config).unwrap_or_else(|| {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dsh/cordis.yml")
+    });
     if !config.is_file() {
         return Err(format!("DeepSeek Harness config not found: {}", config.display()));
     }
@@ -301,16 +308,30 @@ fn runtime_launch(app: &AppHandle) -> Result<RuntimeLaunch, String> {
         });
     }
 
-    let packaged = app
-        .path()
-        .resource_dir()
-        .ok()
-        .map(|root| root.join("dsh-runtime").join(runtime_binary_name()))
-        .filter(|path| path.is_file());
-    if let Some(executable) = packaged {
+    let packaged_root = resource_root
+        .map(|root| root.join("dsh-runtime"))
+        .filter(|root| root.join(runtime_binary_name()).is_file());
+    if let Some(root) = packaged_root {
+        let executable = root.join(runtime_binary_name());
+        let script = root
+            .join("app")
+            .join("node_modules")
+            .join("@deepseek-ai")
+            .join("dsh-sdk-jsonrpc-demo")
+            .join("lib")
+            .join("bin.js");
+        if !script.is_file() {
+            return Err(format!(
+                "packaged DeepSeek Harness entry not found: {}",
+                script.display()
+            ));
+        }
         return Ok(RuntimeLaunch {
             executable,
-            args: Vec::new(),
+            args: vec![
+                script.to_string_lossy().into_owned(),
+                config.to_string_lossy().into_owned(),
+            ],
             config,
         });
     }
