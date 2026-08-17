@@ -1,0 +1,12 @@
+{
+  "build": {
+    "beforeBuildCommand": "pnpm build && pnpm prepare:dsh-runtime:windows"
+  },
+  "bundle": {
+    "resources": {
+      "../dsh/cordis.yml": "dsh/cordis.yml",
+      "../dsh-runtime/": "dsh-runtime/"
+    },
+    "targets": ["nsis"]
+  }
+}

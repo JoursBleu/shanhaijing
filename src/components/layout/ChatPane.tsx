@@ -392,9 +392,9 @@ export function ChatPane() {
           <header className="h-12 px-4 flex items-center border-b border-[var(--color-border)] font-semibold">
             Agents
           </header>
-          <PanelView>
-            <AgentsPanel />
-          </PanelView>
+          <div className="flex-1 overflow-y-auto">
+            <div className="mx-auto max-w-6xl p-6"><AgentsPanel /></div>
+          </div>
         </>
       )}
       {view.kind === "skills" && (

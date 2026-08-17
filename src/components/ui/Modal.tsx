@@ -6,12 +6,14 @@ export function Modal({
   onClose,
   children,
   footer,
+  panelClassName,
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  panelClassName?: string;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -24,7 +26,7 @@ export function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div
-        className="bg-[var(--color-bg-1)] border border-[var(--color-border)] rounded-lg w-[min(560px,92vw)] max-h-[88vh] flex flex-col shadow-2xl"
+        className={`bg-[var(--color-bg-1)] border border-[var(--color-border)] rounded-xl w-[min(560px,92vw)] max-h-[88vh] flex flex-col shadow-2xl ${panelClassName ?? ""}`}
         onClick={(e) => e.stopPropagation()}
       >
         <header className="px-4 py-3 border-b border-[var(--color-border)] font-semibold flex items-center justify-between">
