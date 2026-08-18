@@ -7,9 +7,7 @@ import { getDb } from "@/db";
 import { createProvider, listProviders } from "@/repos/providers";
 import { seedTemplates } from "@/features/seedTemplates";
 import "@/features/builtinTools"; // side-effect: registers memory/skill/web agent tools
-import "@/features/appManagementTools"; // side-effect: registers built-in app-management tools
 import { initMcp } from "@/features/mcpInit";
-import { ensureSystemAssistant } from "@/features/systemAssistant";
 
 const PRESET_PROVIDERS: Array<{
   name: string;
@@ -38,7 +36,10 @@ const PRESET_PROVIDERS: Array<{
   },
 ];
 
-export async function bootstrap(): Promise<void> {
+let bootstrapPromise: Promise<void> | null = null;
+let afterStartupPromise: Promise<void> | null = null;
+
+async function runBootstrap(): Promise<void> {
   await getDb();
 
   const providers = await listProviders();
@@ -57,8 +58,40 @@ export async function bootstrap(): Promise<void> {
   // Seed skill / agent samples (each section no-ops if its own table is
   // non-empty, so user data is never overwritten).
   await seedTemplates();
-  await ensureSystemAssistant();
 
   // Connect enabled MCP servers and register their tools (non-blocking).
   initMcp().catch(() => {});
+}
+
+/** Open the database and load data required for the first usable frame. */
+export function bootstrap(): Promise<void> {
+  if (!bootstrapPromise) {
+    bootstrapPromise = runBootstrap().catch((error) => {
+      bootstrapPromise = null;
+      throw error;
+    });
+  }
+  return bootstrapPromise;
+}
+
+/**
+ * Provision optional built-ins after the application shell is visible.
+ * A failure here must not leave the native window blank or unusable.
+ */
+export function initializeAfterStartup(): Promise<void> {
+  if (!afterStartupPromise) {
+    afterStartupPromise = (async () => {
+      const [{ registerAppManagementTools }, { ensureSystemAssistant }] =
+        await Promise.all([
+          import("@/features/appManagementTools"),
+          import("@/features/systemAssistant"),
+        ]);
+      registerAppManagementTools();
+      await ensureSystemAssistant();
+    })().catch((error) => {
+      afterStartupPromise = null;
+      throw error;
+    });
+  }
+  return afterStartupPromise;
 }

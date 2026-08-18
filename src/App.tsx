@@ -3,7 +3,7 @@ import { AgentRail } from "@/components/layout/AgentRail";
 import { ConversationList } from "@/components/layout/ConversationList";
 import { ChatPane } from "@/components/layout/ChatPane";
 import { DialogHost } from "@/components/DialogHost";
-import { bootstrap } from "@/features/bootstrap";
+import { bootstrap, initializeAfterStartup } from "@/features/bootstrap";
 import { useData } from "@/stores/data";
 
 export default function App() {
@@ -17,6 +17,11 @@ export default function App() {
         await bootstrap();
         await reloadAll();
         setReady(true);
+        void initializeAfterStartup()
+          .then(() => useData.getState().reloadAgents())
+          .catch((error) => {
+            console.error("Post-startup initialization failed", error);
+          });
       } catch (e: any) {
         setErr(e?.message ?? String(e));
       }

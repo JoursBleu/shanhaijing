@@ -127,8 +127,6 @@ export async function rememberAssistantModel(
   providerId: string,
   model: string,
 ): Promise<void> {
-  await Promise.all([
-    setSetting(DEFAULT_PROVIDER_SETTING, providerId),
-    setSetting(DEFAULT_MODEL_SETTING, model),
-  ]);
+  await setSetting(DEFAULT_PROVIDER_SETTING, providerId);
+  await setSetting(DEFAULT_MODEL_SETTING, model);
 }

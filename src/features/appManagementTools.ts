@@ -20,6 +20,12 @@ import { getSystemAssistantId } from "@/features/systemAssistant";
 import type { ToolContext } from "@/llm/tools";
 import { useData } from "@/stores/data";
 
+let registered = false;
+
+export function registerAppManagementTools(): void {
+  if (registered) return;
+  registered = true;
+
 registerTool({
   name: "shanhaijing_status",
   description:
@@ -307,6 +313,7 @@ registerTool({
     return `Configured execution backend: ${kind}${text(args?.target) ? ` (${text(args.target)})` : ""}.`;
   },
 });
+}
 
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
