@@ -5,6 +5,7 @@ import { ChatPane } from "@/components/layout/ChatPane";
 import { DialogHost } from "@/components/DialogHost";
 import { bootstrap, initializeAfterStartup } from "@/features/bootstrap";
 import { useData } from "@/stores/data";
+import { useUI } from "@/stores/ui";
 
 export default function App() {
   const reloadAll = useData((s) => s.reloadAll);
@@ -18,7 +19,13 @@ export default function App() {
         await reloadAll();
         setReady(true);
         void initializeAfterStartup()
-          .then(() => useData.getState().reloadAgents())
+          .then(async (conversationId) => {
+            await Promise.all([
+              useData.getState().reloadAgents(),
+              useData.getState().reloadConversations(),
+            ]);
+            useUI.getState().setView({ kind: "conversation", id: conversationId });
+          })
           .catch((error) => {
             console.error("Post-startup initialization failed", error);
           });

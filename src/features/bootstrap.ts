@@ -37,7 +37,7 @@ const PRESET_PROVIDERS: Array<{
 ];
 
 let bootstrapPromise: Promise<void> | null = null;
-let afterStartupPromise: Promise<void> | null = null;
+let afterStartupPromise: Promise<string> | null = null;
 
 async function runBootstrap(): Promise<void> {
   await getDb();
@@ -78,16 +78,19 @@ export function bootstrap(): Promise<void> {
  * Provision optional built-ins after the application shell is visible.
  * A failure here must not leave the native window blank or unusable.
  */
-export function initializeAfterStartup(): Promise<void> {
+export function initializeAfterStartup(): Promise<string> {
   if (!afterStartupPromise) {
     afterStartupPromise = (async () => {
-      const [{ registerAppManagementTools }, { ensureSystemAssistant }] =
-        await Promise.all([
-          import("@/features/appManagementTools"),
-          import("@/features/systemAssistant"),
-        ]);
+      const [
+        { registerAppManagementTools },
+        { ensureSystemAssistant, ensureSystemAssistantConversation },
+      ] = await Promise.all([
+        import("@/features/appManagementTools"),
+        import("@/features/systemAssistant"),
+      ]);
       registerAppManagementTools();
-      await ensureSystemAssistant();
+      const assistantId = await ensureSystemAssistant();
+      return ensureSystemAssistantConversation(assistantId);
     })().catch((error) => {
       afterStartupPromise = null;
       throw error;

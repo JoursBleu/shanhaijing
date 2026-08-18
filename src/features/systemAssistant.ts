@@ -1,4 +1,8 @@
 import { createAgent, getAgent, updateAgent } from "@/repos/agents";
+import {
+  createConversation,
+  listConversations,
+} from "@/repos/conversations";
 import { listModels, listProviders } from "@/repos/providers";
 import { getSetting, setSetting } from "@/repos/settings";
 
@@ -92,6 +96,21 @@ export async function ensureSystemAssistant(): Promise<string> {
 
 export async function getSystemAssistantId(): Promise<string | null> {
   return getSetting(ASSISTANT_ID_SETTING);
+}
+
+/** Return the existing assistant conversation, or create its default one. */
+export async function ensureSystemAssistantConversation(
+  assistantId: string,
+): Promise<string> {
+  const existing = (await listConversations()).find(
+    (conversation) => conversation.agent_id === assistantId,
+  );
+  if (existing) return existing.id;
+
+  return createConversation({
+    agent_id: assistantId,
+    title: `与 ${SYSTEM_ASSISTANT_NAME} 的对话`,
+  });
 }
 
 async function firstAvailableModel(): Promise<{
