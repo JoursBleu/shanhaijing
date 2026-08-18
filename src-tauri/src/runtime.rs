@@ -110,7 +110,7 @@ impl RuntimeManager {
         let mut child = command.spawn().map_err(|error| {
             let message = format!(
                 "cannot start DeepSeek Harness runtime at {}: {error}",
-                    launch.executable.display()
+                launch.executable.display()
             );
             state.last_error = Some(message.clone());
             message
@@ -286,11 +286,14 @@ fn runtime_launch(app: &AppHandle) -> Result<RuntimeLaunch, String> {
         .as_ref()
         .map(|root| root.join("dsh").join("cordis.yml"))
         .filter(|path| path.is_file());
-    let config = configured.or(packaged_config).unwrap_or_else(|| {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dsh/cordis.yml")
-    });
+    let config = configured
+        .or(packaged_config)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dsh/cordis.yml"));
     if !config.is_file() {
-        return Err(format!("DeepSeek Harness config not found: {}", config.display()));
+        return Err(format!(
+            "DeepSeek Harness config not found: {}",
+            config.display()
+        ));
     }
 
     if let Some(executable) = std::env::var_os("SHANHAIJING_DSH_RUNTIME_BIN")
@@ -346,7 +349,10 @@ fn runtime_launch(app: &AppHandle) -> Result<RuntimeLaunch, String> {
     if script.is_file() {
         return Ok(RuntimeLaunch {
             executable: PathBuf::from(if cfg!(windows) { "node.exe" } else { "node" }),
-            args: vec![script.to_string_lossy().into_owned(), config.to_string_lossy().into_owned()],
+            args: vec![
+                script.to_string_lossy().into_owned(),
+                config.to_string_lossy().into_owned(),
+            ],
             config,
         });
     }

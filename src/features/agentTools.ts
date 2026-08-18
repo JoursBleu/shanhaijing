@@ -10,6 +10,7 @@
 import { listTools, type ToolSpec } from "@/llm/tools";
 import { listAgentKbIds } from "@/repos/agents";
 import { loadExecBackend } from "@/features/execConfig";
+import { getSystemAssistantId } from "@/features/systemAssistant";
 import type { Agent } from "@/types/domain";
 
 export interface AgentToolConfig {
@@ -33,8 +34,12 @@ export async function resolveAgentTools(
 ): Promise<AgentToolConfig> {
   const knowledgeBaseIds = await listAgentKbIds(agent.id);
   const whitelist = parseWhitelist(agent.enabled_tools_json);
+  const systemAssistantId = await getSystemAssistantId();
 
   const tools = listTools().filter((t) => {
+    if (t.name.startsWith("shanhaijing_") && agent.id !== systemAssistantId) {
+      return false;
+    }
     const isMcp = t.source === "mcp";
     if (isMcp) {
       if (agent.mcp_mode === "disabled") return false;

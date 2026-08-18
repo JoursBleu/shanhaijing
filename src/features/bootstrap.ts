@@ -7,7 +7,9 @@ import { getDb } from "@/db";
 import { createProvider, listProviders } from "@/repos/providers";
 import { seedTemplates } from "@/features/seedTemplates";
 import "@/features/builtinTools"; // side-effect: registers memory/skill/web agent tools
+import "@/features/appManagementTools"; // side-effect: registers built-in app-management tools
 import { initMcp } from "@/features/mcpInit";
+import { ensureSystemAssistant } from "@/features/systemAssistant";
 
 const PRESET_PROVIDERS: Array<{
   name: string;
@@ -55,6 +57,7 @@ export async function bootstrap(): Promise<void> {
   // Seed skill / agent samples (each section no-ops if its own table is
   // non-empty, so user data is never overwritten).
   await seedTemplates();
+  await ensureSystemAssistant();
 
   // Connect enabled MCP servers and register their tools (non-blocking).
   initMcp().catch(() => {});

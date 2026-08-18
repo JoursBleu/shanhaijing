@@ -17,7 +17,7 @@ import {
   type ChatMessage,
   type ToolCall,
 } from "@/llm/openai";
-import { listTools, getTool, toToolDef, type ToolSpec } from "@/llm/tools";
+import { listTools, toToolDef, type ToolSpec } from "@/llm/tools";
 
 export interface ToolEvent {
   kind: "call" | "result" | "denied" | "error";
@@ -81,6 +81,7 @@ export async function runAgentTurn(
   input: AgentTurnInput,
 ): Promise<AgentTurnResult> {
   const tools = input.tools ?? listTools();
+  const executableTools = new Map(tools.map((tool) => [tool.name, tool]));
   const toolDefs = tools.length > 0 ? tools.map(toToolDef) : undefined;
   const wire: ChatMessage[] = [...input.messages];
   const trace: ToolEvent[] = [];
@@ -165,7 +166,10 @@ export async function runAgentTurn(
       } catch {
         args = {};
       }
-      const spec = getTool(c.name);
+      // Execution uses the exact capability set resolved for this turn. Never
+      // fall back to the global registry: a model may fabricate a registered
+      // tool name that was intentionally not advertised to this agent.
+      const spec = executableTools.get(c.name);
       let output: string;
 
       if (!spec) {

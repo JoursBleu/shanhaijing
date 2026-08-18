@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { confirmModal, promptModal } from "@/stores/dialog";
 import { useData } from "@/stores/data";
 import { useUI } from "@/stores/ui";
@@ -17,6 +17,7 @@ import {
   renameFolder,
   setConversationFolder,
 } from "@/repos/folders";
+import { getSystemAssistantId } from "@/features/systemAssistant";
 
 
 export function ConversationList() {
@@ -35,6 +36,22 @@ export function ConversationList() {
   const [title, setTitle] = useState("");
   const [moveMenuFor, setMoveMenuFor] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    if (!newOpen || agentId) return;
+    let cancelled = false;
+    getSystemAssistantId().then((id) => {
+      if (cancelled) return;
+      const configured = agents.filter(
+        (agent) => agent.default_provider_id && agent.default_model,
+      );
+      const next = agents.find((agent) => agent.id === id) ?? configured[0] ?? agents[0];
+      if (next) setAgentId((current) => current || next.id);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [newOpen, agentId, agents]);
 
   const grouped = useMemo(() => {
     const byFolder = new Map<string | null, typeof conversations>();

@@ -66,12 +66,14 @@ function buildArgv(backend: ExecBackend, command: string): [string, string[]] {
       return ["ssh", ["-o", "BatchMode=yes", dest, inner]];
     }
     case "local":
-    default: {
+    {
       const args = backend.cwd
         ? ["-lc", `cd ${shellQuote(backend.cwd)} && ${command}`]
         : ["-lc", command];
       return ["bash", args];
     }
+    default:
+      throw new Error(`unsupported execution backend: ${String(backend.kind)}`);
   }
 }
 

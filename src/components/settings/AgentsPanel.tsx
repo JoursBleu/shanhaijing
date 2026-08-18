@@ -17,6 +17,10 @@ import { Field } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
 import type { AgentRuntime, McpMode, ToolMode } from "@/types/domain";
 import { Bot, Brain, Pencil, Plus, Sparkles, Trash2, Wrench } from "lucide-react";
+import {
+  getSystemAssistantId,
+  rememberAssistantModel,
+} from "@/features/systemAssistant";
 
 interface Draft {
   id?: string;
@@ -62,9 +66,11 @@ export function AgentsPanel() {
   const [editing, setEditing] = useState<Draft | null>(null);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
+  const [systemAssistantId, setSystemAssistantId] = useState<string | null>(null);
 
   useEffect(() => {
     listKnowledgeBases().then(setKbs);
+    getSystemAssistantId().then(setSystemAssistantId);
   }, []);
 
   // --- Bulk assign default provider/model to unconfigured agents ---
@@ -183,6 +189,9 @@ export function AgentsPanel() {
       agentId = editing.id;
     } else {
       agentId = await createAgent(payload);
+    }
+    if (agentId === systemAssistantId) {
+      await rememberAssistantModel(editing.provider_id, editing.model);
     }
     await setAgentSkills(agentId, editing.skill_ids);
     await setAgentKbIds(agentId, editing.kb_ids);
@@ -312,9 +321,12 @@ export function AgentsPanel() {
       )}
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-4">
-        {agents.map((a) => {
+        {[...agents]
+          .sort((a, b) => Number(b.id === systemAssistantId) - Number(a.id === systemAssistantId))
+          .map((a) => {
           const p = providers.find((x) => x.id === a.default_provider_id);
           const configured = !!a.default_provider_id && !!a.default_model;
+          const isSystemAssistant = a.id === systemAssistantId;
           const persona = a.persona_text?.trim() || "这个角色还没有写下自己的故事。";
           return (
             <article
@@ -327,6 +339,11 @@ export function AgentsPanel() {
                   <span className="rounded-full border border-white/25 bg-black/20 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">
                     {a.runtime === "dsh" ? "Harness" : "Legacy"}
                   </span>
+                  {isSystemAssistant && (
+                    <span className="rounded-full border border-white/25 bg-white/20 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">
+                      默认助手
+                    </span>
+                  )}
                 </div>
                 <div className="absolute -bottom-8 left-5 size-20 overflow-hidden rounded-2xl border-4 border-[var(--color-bg-1)] bg-white/20 shadow-lg backdrop-blur">
                   <div className="flex size-full items-center justify-center text-3xl font-black text-white">
@@ -375,6 +392,7 @@ export function AgentsPanel() {
                     variant="ghost"
                     className="text-[var(--color-text-3)] hover:text-[var(--color-danger)]"
                     onClick={() => remove(a.id)}
+                    disabled={isSystemAssistant}
                     aria-label={`删除 ${a.name}`}
                   >
                     <Trash2 className="size-3.5" />
@@ -383,7 +401,7 @@ export function AgentsPanel() {
               </div>
             </article>
           );
-        })}
+          })}
 
         <button
           type="button"

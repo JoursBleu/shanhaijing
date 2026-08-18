@@ -17,7 +17,7 @@ export async function loadExecBackend(): Promise<ExecBackend | null> {
   if (!raw) return null;
   try {
     const v = JSON.parse(raw);
-    if (!v?.kind) return null;
+    if (!isExecBackendKind(v?.kind)) return null;
     return {
       kind: v.kind as ExecBackendKind,
       target: v.target ?? null,
@@ -27,6 +27,10 @@ export async function loadExecBackend(): Promise<ExecBackend | null> {
   } catch {
     return null;
   }
+}
+
+function isExecBackendKind(value: unknown): value is ExecBackendKind {
+  return value === "local" || value === "wsl" || value === "docker" || value === "ssh";
 }
 
 export async function saveExecBackend(b: ExecBackend | null): Promise<void> {
